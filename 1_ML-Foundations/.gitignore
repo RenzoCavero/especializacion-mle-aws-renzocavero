@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_tmp/
+pytest-cache-files-*/
+test_tmp/
+test_work/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment files
+.env
+.env.local
+
+# Generated data and artifacts
+data/raw/*.csv
+data/raw/*.json
+data/processed/*.csv
+data/processed/*.json
+artifacts/model/*
+artifacts/metrics/*
+artifacts/predictions/*
+artifacts/governance/*
+
+# Local Codex context
+AGENTS.md
+ai_context/
+
+# Keep source material
+!doc/
+!doc/AWS_Machine_Learning_Foundations.pdf
