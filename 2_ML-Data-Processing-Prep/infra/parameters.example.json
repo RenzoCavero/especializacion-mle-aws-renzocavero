@@ -1,0 +1,27 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "ml-data-processing-prep"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "lab"
+  },
+  {
+    "ParameterKey": "ResourcePrefix",
+    "ParameterValue": "ml-data-prep-lab"
+  },
+  {
+    "ParameterKey": "BucketName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "GlueDatabaseName",
+    "ParameterValue": "ml_data_prep_lab"
+  },
+  {
+    "ParameterKey": "LogRetentionDays",
+    "ParameterValue": "14"
+  }
+]
+

@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.mypy_cache/
+
+data/sample/*.csv
+data/local_cache/*
+!data/local_cache/.gitkeep
+
+artifacts/local_outputs/*
+!artifacts/local_outputs/.gitkeep
+
+*.log
