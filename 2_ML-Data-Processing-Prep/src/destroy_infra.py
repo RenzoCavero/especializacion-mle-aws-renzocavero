@@ -39,35 +39,64 @@ def _stack_resource_physical_id(cf, stack_name: str, logical_id: str) -> Optiona
     return None
 
 
+def _is_error_code(exc: Exception, code: str) -> bool:
+    return getattr(exc, "response", {}).get("Error", {}).get("Code") == code
+
+
 def _empty_bucket(s3, bucket_name: str) -> None:
     print(f"Emptying s3://{bucket_name}/ before stack deletion...")
     paginator = s3.get_paginator("list_object_versions")
     to_delete: List[dict] = []
-    for page in paginator.paginate(Bucket=bucket_name):
-        for item in page.get("Versions", []) + page.get("DeleteMarkers", []):
-            to_delete.append({"Key": item["Key"], "VersionId": item["VersionId"]})
-            if len(to_delete) == 1000:
-                s3.delete_objects(Bucket=bucket_name, Delete={"Objects": to_delete})
-                to_delete = []
-    if to_delete:
-        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": to_delete})
+    try:
+        for page in paginator.paginate(Bucket=bucket_name):
+            for item in page.get("Versions", []) + page.get("DeleteMarkers", []):
+                to_delete.append({"Key": item["Key"], "VersionId": item["VersionId"]})
+                if len(to_delete) == 1000:
+                    s3.delete_objects(Bucket=bucket_name, Delete={"Objects": to_delete})
+                    to_delete = []
+        if to_delete:
+            s3.delete_objects(Bucket=bucket_name, Delete={"Objects": to_delete})
+    except Exception as exc:
+        if _is_error_code(exc, "NoSuchBucket"):
+            print(f"Bucket s3://{bucket_name}/ does not exist. Continuing with stack deletion.")
+            return
+        raise
 
     paginator = s3.get_paginator("list_objects_v2")
     batch: List[dict] = []
-    for page in paginator.paginate(Bucket=bucket_name):
-        for item in page.get("Contents", []):
-            batch.append({"Key": item["Key"]})
-            if len(batch) == 1000:
-                s3.delete_objects(Bucket=bucket_name, Delete={"Objects": batch})
-                batch = []
-    if batch:
-        s3.delete_objects(Bucket=bucket_name, Delete={"Objects": batch})
+    try:
+        for page in paginator.paginate(Bucket=bucket_name):
+            for item in page.get("Contents", []):
+                batch.append({"Key": item["Key"]})
+                if len(batch) == 1000:
+                    s3.delete_objects(Bucket=bucket_name, Delete={"Objects": batch})
+                    batch = []
+        if batch:
+            s3.delete_objects(Bucket=bucket_name, Delete={"Objects": batch})
+    except Exception as exc:
+        if _is_error_code(exc, "NoSuchBucket"):
+            print(f"Bucket s3://{bucket_name}/ does not exist. Continuing with stack deletion.")
+            return
+        raise
+
+
+def _delete_data_quality_ruleset(glue, ruleset_name: str) -> None:
+    if not ruleset_name:
+        return
+    try:
+        glue.delete_data_quality_ruleset(Name=ruleset_name)
+        print(f"Deleted Glue Data Quality ruleset {ruleset_name}.")
+    except glue.exceptions.EntityNotFoundException:
+        return
+    except Exception as exc:
+        print(f"Could not delete Glue Data Quality ruleset {ruleset_name}: {exc}")
 
 
 def destroy(retain_glue_role: bool = False) -> None:
     settings = get_settings()
     cf = client("cloudformation", settings)
     s3 = client("s3", settings)
+    glue = client("glue", settings)
     try:
         outputs = get_stack_outputs(settings.stack_name, settings)
     except Exception:
@@ -79,6 +108,8 @@ def destroy(retain_glue_role: bool = False) -> None:
 
     if bucket and settings.empty_bucket_on_destroy:
         _empty_bucket(s3, bucket)
+
+    _delete_data_quality_ruleset(glue, settings.glue_data_quality_ruleset_name)
 
     print(f"Deleting stack {settings.stack_name}...")
     delete_kwargs = {"StackName": settings.stack_name}

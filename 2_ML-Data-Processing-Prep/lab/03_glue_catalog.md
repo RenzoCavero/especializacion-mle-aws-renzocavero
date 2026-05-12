@@ -35,14 +35,32 @@ python -m src.register_catalog
 
 registra o actualiza tablas externas en Glue Data Catalog apuntando a rutas S3.
 
-No sube datos y no transforma archivos. Solo crea metadata: nombre de tabla, columnas, tipos, formato CSV y ubicacion S3.
+No genera datos y no transforma archivos. Su responsabilidad principal es crear metadata: nombre de tabla, columnas, tipos, formato CSV y ubicacion S3.
+
+Ademas, si ya existen archivos CSV de una etapa, sincroniza una copia compatible con Athena bajo un prefijo tipo carpeta. Esto evita que Athena encuentre el esquema en Glue, pero no lea filas porque la tabla apunta a un objeto individual.
 
 Ejemplo conceptual:
 
 ```text
-raw_transactions -> s3://<bucket>/raw/transactions.csv
-features_training -> s3://<bucket>/features/training_dataset.csv
-features_inference -> s3://<bucket>/inference/inference_dataset.csv
+raw_transactions -> Location: s3://<bucket>/raw/transactions/
+features_training -> Location: s3://<bucket>/features/training_dataset/
+features_inference -> Location: s3://<bucket>/inference/inference_dataset/
+```
+
+Los archivos originales siguen existiendo para lectura directa y compatibilidad con el laboratorio:
+
+```text
+s3://<bucket>/raw/transactions.csv
+s3://<bucket>/features/training_dataset.csv
+s3://<bucket>/inference/inference_dataset.csv
+```
+
+Las tablas Glue apuntan a copias bajo prefijos consultables por Athena:
+
+```text
+s3://<bucket>/raw/transactions/transactions.csv
+s3://<bucket>/features/training_dataset/training_dataset.csv
+s3://<bucket>/inference/inference_dataset/inference_dataset.csv
 ```
 
 La operacion es idempotente:
@@ -64,9 +82,9 @@ Esto permite ejecutar `make catalog` varias veces durante desarrollo.
 `python -m src.register_catalog`:
 
 - Registra tablas Glue.
-- No genera datos.
-- No sube CSV.
-- No ejecuta transformaciones.
+- No genera datos sinteticos.
+- No transforma datasets.
+- Si los CSV ya existen, sincroniza copias bajo prefijos de tabla para Athena.
 
 ## Validar Tablas Glue
 
@@ -80,3 +98,17 @@ Si no aparecen tablas, revisa:
 - Que el stack CloudFormation haya creado la base Glue.
 - Que `AWS_REGION` sea la misma region donde desplegaste.
 - Que el usuario tenga permisos `glue:GetDatabase`, `glue:GetTable`, `glue:CreateTable` y `glue:UpdateTable`.
+
+## Extensiones Nativas Relacionadas
+
+Despues de ejecutar el pipeline principal puedes probar:
+
+- Athena para consultar tablas catalogadas con SQL.
+- Glue Crawler para descubrir esquemas desde S3.
+- Glue Data Catalog Column Statistics para calcular estadisticas administradas.
+
+Guia paso a paso:
+
+```text
+lab/10_athena_glue_native_features.md
+```

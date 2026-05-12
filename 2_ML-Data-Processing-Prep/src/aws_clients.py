@@ -65,8 +65,29 @@ def get_glue_job_name(settings: Optional[Settings] = None) -> str:
     return outputs.get("GlueJobName", cfg.glue_job_name)
 
 
+def get_glue_crawler_name(settings: Optional[Settings] = None) -> str:
+    cfg = settings or get_settings()
+    outputs = get_stack_outputs(cfg.stack_name, cfg)
+    return outputs.get("GlueCrawlerName", cfg.glue_crawler_name)
+
+
+def get_glue_data_quality_ruleset_name(settings: Optional[Settings] = None) -> str:
+    cfg = settings or get_settings()
+    return cfg.glue_data_quality_ruleset_name
+
+
 def get_glue_database_name(settings: Optional[Settings] = None) -> str:
     cfg = settings or get_settings()
     outputs = get_stack_outputs(cfg.stack_name, cfg)
     return outputs.get("GlueDatabaseName", cfg.glue_database_name)
 
+
+def get_processing_role_arn(settings: Optional[Settings] = None) -> str:
+    cfg = settings or get_settings()
+    if cfg.glue_role_arn:
+        return cfg.glue_role_arn
+    outputs = get_stack_outputs(cfg.stack_name, cfg)
+    role_arn = outputs.get("ProcessingRoleArn")
+    if not role_arn:
+        raise RuntimeError("ProcessingRoleArn output not found. Deploy infrastructure first.")
+    return role_arn

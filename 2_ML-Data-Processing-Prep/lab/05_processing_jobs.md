@@ -49,6 +49,8 @@ Conceptualmente, este job cumple el rol que en un proyecto real podria resolvers
 
 En este laboratorio se usa Glue Python Shell por simplicidad, costo bajo y buena integracion con S3, Glue Data Catalog y CloudWatch Logs.
 
+Los servicios Glue Crawler, Glue Data Quality y Glue Data Catalog Column Statistics se ejecutan como extras opcionales despues del pipeline principal. No forman parte del Glue Python Shell Job porque son capacidades administradas separadas y conviene que el estudiante vea su ejecucion, permisos, costo y outputs de forma explicita. Estan documentados en `lab/10_athena_glue_native_features.md`.
+
 ## Como Se Ejecuta
 
 Comando recomendado:
@@ -183,7 +185,7 @@ Registrar tablas externas en AWS Glue Data Catalog para que las capas del data l
 
 ### Inputs
 
-No lee el contenido completo de los CSV. Usa:
+No lee el contenido completo de los CSV para transformar datos. Usa archivos fuente si existen:
 
 ```text
 s3://<bucket>/raw/customers.csv
@@ -208,7 +210,8 @@ src/schemas.py
 - Crea o actualiza tablas Glue.
 - Define columnas y tipos.
 - Define formato CSV.
-- Asocia cada tabla con una ruta S3.
+- Asocia cada tabla con un prefijo S3 consultable por Athena.
+- Si el archivo fuente existe, sincroniza una copia 1:1 bajo el prefijo de tabla.
 - Puede registrar metadata antes de que algunos outputs existan fisicamente, por ejemplo `cleaned/` o `features/`.
 
 Es una operacion idempotente:
@@ -244,8 +247,22 @@ Tabla resultante:
 ```text
 Database: ml_data_prep_lab
 Table: raw_transactions
-Location: s3://<bucket>/raw/transactions.csv
+Location: s3://<bucket>/raw/transactions/
 Columns: transaction_id, customer_id, event_time, amount, merchant_category, channel, country, device_type, is_fraud
+```
+
+Objeto que Athena lee dentro de ese `Location`:
+
+```text
+s3://<bucket>/raw/transactions/transactions.csv
+```
+
+El mismo patron aplica a `features_training`:
+
+```text
+Archivo simple: s3://<bucket>/features/training_dataset.csv
+Location Glue:  s3://<bucket>/features/training_dataset/
+Objeto Athena:  s3://<bucket>/features/training_dataset/training_dataset.csv
 ```
 
 Validar:
@@ -1132,6 +1149,79 @@ Usa pasos individuales solo para debug o aprendizaje:
 bash scripts/run_processing_job.sh quality
 bash scripts/run_processing_job.sh features
 ```
+
+## Diseno Productivo: Un Job O Varios Jobs
+
+En este laboratorio se usa un solo Glue Python Shell Job con pasos modulares. Es una decision didactica y de costo:
+
+- Menos recursos que explicar y destruir.
+- Menos ejecuciones Glue para estudiantes.
+- Un solo `run_id` para producir todos los artefactos.
+- Codigo Python separado por responsabilidad, aunque corra en un mismo job.
+
+En produccion, separar el ETL en varios jobs puede ser una buena practica cuando cada etapa tiene contrato, escala o ciclo de vida propio. Una division comun seria:
+
+```text
+raw -> cleaned
+cleaned -> curated
+curated -> features
+```
+
+### Cuando Conviene Separar
+
+Separar en tres jobs suele tener sentido si:
+
+- Cada capa tiene una salida reutilizable por equipos distintos.
+- Raw-to-cleaned necesita reglas de calidad, deduplicacion o normalizacion independientes.
+- Cleaned-to-curated hace joins pesados, enriquecimiento o cambia de granularidad.
+- Curated-to-features pertenece al dominio ML y debe evolucionar con entrenamiento, inferencia o Feature Store.
+- Cada etapa requiere diferente capacidad, timeout, dependencias o permisos IAM.
+- Quieres reintentar solo una etapa sin recalcular todo.
+- Quieres orquestar dependencias como grafo con AWS Glue Workflows, Glue Triggers, Step Functions o SageMaker Pipelines.
+
+### Cuando No Conviene Separar Todavia
+
+No conviene dividir por dividir si:
+
+- El dataset es pequeno.
+- Todas las etapas usan la misma capacidad y el mismo equipo las mantiene.
+- El costo de arranque de multiples jobs domina el tiempo real de procesamiento.
+- La orquestacion agrega mas complejidad que valor para el objetivo pedagogico.
+- Aun estas prototipando el contrato de datos.
+
+### Patron Recomendado Para Produccion
+
+Una arquitectura mas productiva podria verse asi:
+
+| Etapa | Servicio | Input | Output | Gate recomendado |
+|---|---|---|---|---|
+| Catalogacion raw | Glue Crawler o tablas explicitas | `raw/` | Glue tables raw | Schema esperado |
+| Calidad raw | Glue Data Quality o reglas en job | Tablas raw | Reporte DQ | Bloquear si hay errores criticos |
+| Raw to cleaned | Glue ETL Job | `raw/` | `cleaned/` en Parquet | Datos corregidos y deduplicados |
+| Cleaned to curated | Glue ETL Job | `cleaned/` | `curated/` en Parquet | Joins, tipos y reglas de negocio |
+| Curated to features | Glue Job, SageMaker Processing o Feature Store ingest | `curated/` | `features/` / Feature Store offline | Contrato training/inference |
+| Consumo | Athena, SageMaker Training, Batch Inference | `curated/`, `features/`, `inference/` | Modelos o predicciones | Validacion y lineage |
+
+Buenas practicas para esa version:
+
+- Escribir capas procesadas en formato columnar como Parquet u ORC para reducir escaneo y mejorar rendimiento.
+- Mantener jobs idempotentes: reejecutar una etapa no debe duplicar outputs.
+- Usar particiones por fecha, fuente o batch cuando el volumen lo justifique.
+- Aplicar calidad antes de publicar cada capa importante.
+- Usar IAM de minimo privilegio por etapa si los equipos o permisos difieren.
+- Emitir logs y metricas por etapa en CloudWatch.
+- Orquestar dependencias con Glue Workflows o Step Functions si hay varios jobs.
+- Para cargas incrementales, evaluar Glue Job Bookmarks y particiones.
+
+Decision del laboratorio: no implementar tres Glue Jobs todavia. El codigo ya esta modularizado por etapas y el parametro `--pipeline-steps` permite ensenar los limites logicos sin multiplicar infraestructura ni costo. Una extension futura puede convertir estos pasos en jobs separados y orquestarlos como DAG.
+
+Referencias AWS utiles para esta decision:
+
+- AWS Glue Data Catalog y Crawlers: https://docs.aws.amazon.com/glue/latest/dg/catalog-and-crawler.html
+- AWS Glue Data Quality: https://docs.aws.amazon.com/glue/latest/dg/glue-data-quality.html
+- AWS Glue Workflows: https://docs.aws.amazon.com/glue/latest/dg/workflows_overview.html
+- AWS Glue Triggers: https://docs.aws.amazon.com/glue/latest/dg/about-triggers.html
+- AWS Prescriptive Guidance para ETL serverless con Glue: https://docs.aws.amazon.com/prescriptive-guidance/latest/serverless-etl-aws-glue/best-practices.html
 
 ## Troubleshooting
 

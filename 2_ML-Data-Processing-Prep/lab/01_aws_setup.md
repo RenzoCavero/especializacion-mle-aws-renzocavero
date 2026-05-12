@@ -154,7 +154,8 @@ El usuario, profile o rol que ejecuta `make all-cloud` necesita permisos para:
 - CloudFormation create/update/delete stack.
 - Crear bucket S3.
 - Crear rol IAM y policy del laboratorio.
-- Crear Glue database y Glue job.
+- Crear Glue database, Glue job y Glue crawler.
+- Crear o actualizar Glue Data Quality ruleset cuando se ejecute `make glue-data-quality`.
 - Crear CloudWatch log group.
 
 Este laboratorio despliega CloudFormation con:
@@ -197,7 +198,7 @@ Servicios requeridos:
 - `cloudformation:*` sobre el stack del laboratorio.
 - `s3:*` solo sobre el bucket del laboratorio.
 - `iam:CreateRole`, `iam:DeleteRole`, `iam:AttachRolePolicy`, `iam:PutRolePolicy`, `iam:PassRole` para el rol de Glue del laboratorio.
-- `glue:*` para database, tables y job del laboratorio.
+- `glue:*` para database, tables, job, crawler, data quality y column statistics del laboratorio.
 - `logs:*` para log groups/streams del laboratorio.
 
 En produccion, reemplaza comodines por acciones y ARNs exactos.
@@ -220,6 +221,9 @@ ENVIRONMENT=lab
 S3_BUCKET_NAME=
 RESOURCE_PREFIX=ml-data-prep-lab
 GLUE_DATABASE_NAME=ml_data_prep_lab
+GLUE_CRAWLER_NAME=
+GLUE_DATA_QUALITY_RULESET_NAME=
+GLUE_DATA_QUALITY_WORKERS=2
 GLUE_ROLE_ARN=
 STACK_NAME=ml-data-prep-lab-stack
 EMPTY_S3_ON_DESTROY=true
@@ -282,9 +286,11 @@ Opcion B: pedir un Glue execution role precreado.
 El rol precreado debe tener:
 
 - Trust policy para `glue.amazonaws.com`.
-- Permisos para leer `raw/` y `scripts/` en el bucket del laboratorio.
-- Permisos para escribir `cleaned/`, `curated/`, `features/`, `inference/`, `profiles/`, `quality/`, `lineage/`, `reports/` y `logs/`.
+- Permisos para leer `raw/`, `scripts/`, `crawler_demo/`, `cleaned/`, `curated/`, `features/` e `inference/` en el bucket del laboratorio.
+- Permiso `s3:GetObject` sobre `arn:aws:s3:::aws-glue-ml-data-quality-assets-<region>/*` si se ejecuta Glue Data Quality.
+- Permisos para escribir `cleaned/`, `curated/`, `features/`, `inference/`, `profiles/`, `quality/`, `lineage/`, `reports/`, `logs/`, `crawler_demo/` y `athena-results/`.
 - Permisos de Glue Data Catalog para la database del laboratorio.
+- Permisos de Glue Column Statistics para tablas del laboratorio si se ejecuta `make column-stats`.
 - Permisos de CloudWatch Logs para los log groups del laboratorio.
 
 Tu profile tambien necesita:

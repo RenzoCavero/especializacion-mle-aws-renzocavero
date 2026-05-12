@@ -11,6 +11,10 @@ Servicios usados:
 - Amazon S3 como data lake.
 - AWS Glue Data Catalog para metadatos.
 - AWS Glue Python Shell Job para profiling, calidad, limpieza, transformacion y features.
+- AWS Glue Crawler como ejemplo opcional de descubrimiento de esquemas.
+- AWS Glue Data Quality como ejemplo opcional de reglas administradas.
+- AWS Glue Data Catalog Column Statistics como ejemplo opcional de estadisticas administradas.
+- Amazon Athena como ejemplo opcional de consulta SQL sobre tablas catalogadas.
 - IAM Role con minimo privilegio.
 - CloudWatch Logs para operacion.
 - CloudFormation como infraestructura reproducible.
@@ -120,6 +124,10 @@ AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=us-east-1
 S3_BUCKET_NAME=
 RESOURCE_PREFIX=ml-data-prep-lab
+GLUE_DATABASE_NAME=ml_data_prep_lab
+GLUE_CRAWLER_NAME=
+GLUE_DATA_QUALITY_RULESET_NAME=
+GLUE_DATA_QUALITY_WORKERS=2
 GLUE_ROLE_ARN=
 ```
 
@@ -188,7 +196,9 @@ bash scripts/download_reports.sh
 python -m src.validate_outputs
 ```
 
-Nota: `bash scripts/upload_sample_data.sh` solo genera datos sinteticos y sube archivos a `s3://<bucket>/raw/`. El registro en Glue Catalog se ejecuta con `python -m src.register_catalog`, `make catalog` o dentro de `bash scripts/run_all_cloud.sh`. La definicion detallada de cada script y modulo esta en `scripts/README.md`.
+Nota: `bash scripts/upload_sample_data.sh` genera datos sinteticos, sube archivos a `s3://<bucket>/raw/` y crea copias raw bajo prefijos compatibles con Athena. El registro en Glue Catalog se ejecuta con `python -m src.register_catalog`, `make catalog` o dentro de `bash scripts/run_all_cloud.sh`. La definicion detallada de cada script y modulo esta en `scripts/README.md`.
+
+Las tablas Glue del laboratorio apuntan a prefijos S3 tipo carpeta. Por ejemplo, `features_training` usa `s3://<bucket>/features/training_dataset/`, que contiene `training_dataset.csv`. El archivo simple `s3://<bucket>/features/training_dataset.csv` tambien se mantiene para descarga directa y compatibilidad didactica.
 
 Cleanup:
 
@@ -217,6 +227,38 @@ make destroy-infra
 ```
 
 Para evitar multiples ejecuciones de Glue y reducir costo, usa `make all-cloud` durante el flujo normal.
+
+## Extras AWS Nativos Opcionales
+
+Despues del pipeline principal puedes ejecutar ejemplos administrados adicionales:
+
+```bash
+make aws-native-extras
+```
+
+Esto ejecuta Glue Crawler, Glue Data Quality y Glue Data Catalog Column Statistics sobre datos ya generados por el laboratorio. Tambien queda documentado un ejemplo paso a paso para consultar las tablas desde la consola de Athena.
+
+Guia detallada:
+
+```text
+lab/10_athena_glue_native_features.md
+```
+
+Ese capitulo explica como trabajar en detalle con:
+
+- Glue Crawler: discovery automatico de esquemas sobre `crawler_demo/`.
+- Glue Data Quality: reglas DQDL administradas sobre `features_training`.
+- Glue Column Statistics: estadisticas administradas para columnas clave del catalogo.
+
+Comandos individuales:
+
+```bash
+make glue-crawler
+make glue-data-quality
+make column-stats
+```
+
+Estos comandos son opcionales y pueden generar costo adicional por ejecuciones de Glue y almacenamiento de resultados en S3.
 
 ## Outputs En S3
 
@@ -319,6 +361,40 @@ bash scripts/run_processing_job.sh all
 ```
 
 Ese comando vuelve a subir `glue_pipeline.py` y `ml_data_prep_src.zip` antes de lanzar el job.
+
+## Troubleshooting Athena
+
+### Query Devuelve 0 Filas Aunque `validate_outputs` Pasa
+
+Si Athena muestra el esquema de `features_training`, pero esta consulta devuelve 0 filas:
+
+```sql
+SELECT split, COUNT(*) AS rows
+FROM features_training
+GROUP BY split
+ORDER BY split;
+```
+
+ejecuta:
+
+```bash
+python -m src.register_catalog
+python -m src.validate_outputs
+```
+
+Luego vuelve a correr la query con `Run again` y, si aplica, desactiva temporalmente `Reuse query results`.
+
+Si `validate_outputs` reporta objetos faltantes, regenera el pipeline:
+
+```bash
+bash scripts/run_processing_job.sh all
+python -m src.register_catalog
+python -m src.validate_outputs
+```
+
+La guia completa esta en `lab/10_athena_glue_native_features.md`.
+
+## Troubleshooting IAM
 
 ### Error IAM: `iam:GetRole` O `iam:DeleteRolePolicy`
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from src.aws_clients import client, get_bucket_name, get_glue_database_name
 from src.config import get_settings
-from src.glue_catalog import TABLES
+from src.glue_catalog import TABLES, catalog_location, catalog_object_key
 
 
 EXPECTED_KEYS = [
@@ -28,6 +28,9 @@ EXPECTED_KEYS = [
 ]
 
 
+EXPECTED_CATALOG_KEYS = [catalog_object_key(table_name) for table_name in TABLES]
+
+
 def _object_exists(s3, bucket: str, key: str) -> bool:
     try:
         s3.head_object(Bucket=bucket, Key=key)
@@ -43,23 +46,39 @@ def validate_outputs() -> None:
     s3 = client("s3", settings)
     glue = client("glue", settings)
 
-    missing = [key for key in EXPECTED_KEYS if not _object_exists(s3, bucket, key)]
+    all_expected_keys = EXPECTED_KEYS + EXPECTED_CATALOG_KEYS
+    missing = [key for key in all_expected_keys if not _object_exists(s3, bucket, key)]
     missing_tables = []
+    location_mismatches = []
     for table_name in TABLES:
         try:
-            glue.get_table(DatabaseName=database, Name=table_name)
+            table = glue.get_table(DatabaseName=database, Name=table_name)["Table"]
         except Exception:
             missing_tables.append(table_name)
+            continue
+        actual_location = table["StorageDescriptor"].get("Location", "")
+        expected_location = catalog_location(table_name, bucket)
+        if f"{actual_location.rstrip('/')}/" != expected_location:
+            location_mismatches.append(
+                {
+                    "table": table_name,
+                    "actual": actual_location,
+                    "expected": expected_location,
+                }
+            )
 
-    if missing or missing_tables:
+    if missing or missing_tables or location_mismatches:
         raise RuntimeError(
-            f"Validation failed. Missing S3 keys={missing}. Missing Glue tables={missing_tables}."
+            "Validation failed. "
+            f"Missing S3 keys={missing}. "
+            f"Missing Glue tables={missing_tables}. "
+            f"Glue table location mismatches={location_mismatches}."
         )
 
     print("Validation passed.")
     print(f"S3 bucket: s3://{bucket}/")
     print(f"Glue database: {database}")
-    print(f"Validated {len(EXPECTED_KEYS)} S3 objects and {len(TABLES)} Glue tables.")
+    print(f"Validated {len(all_expected_keys)} S3 objects and {len(TABLES)} Glue tables.")
 
 
 def main() -> None:

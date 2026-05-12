@@ -37,6 +37,9 @@ Recursos que pueden generar costos:
 - Buckets S3 con datos y artefactos.
 - Glue Jobs.
 - Glue Crawlers.
+- Glue Data Quality evaluations.
+- Glue Data Catalog Column Statistics tasks.
+- Athena queries por datos escaneados.
 - SageMaker Processing Jobs.
 - SageMaker Feature Store.
 - CloudWatch Logs.
@@ -50,6 +53,8 @@ Comandos orientativos:
 aws cloudformation describe-stacks --stack-name ml-data-prep-lab-stack --profile <profile> --region <region>
 aws s3 ls s3://<bucket-name>/ --recursive --profile <profile> --region <region>
 aws glue get-databases --profile <profile> --region <region>
+aws glue list-crawlers --profile <profile> --region <region>
+aws glue list-data-quality-rulesets --profile <profile> --region <region>
 aws logs describe-log-groups --log-group-name-prefix /aws/ml-data-prep-lab --profile <profile> --region <region>
 ```
 
@@ -67,6 +72,8 @@ Recomendaciones:
 - Revisar AWS Billing and Cost Management.
 - Filtrar por tags `Project=MLDataProcessingPrep` y `CostCenter=Training` si estan disponibles.
 - Revisar servicios S3, Glue, SageMaker, CloudWatch y KMS.
+- En Athena, configurar `s3://<bucket>/athena-results/` y evitar consultas `SELECT *` innecesarias sobre datasets grandes.
+- Ejecutar Glue Crawler, Glue Data Quality y Column Statistics solo cuando se necesite el demo.
 - Destruir recursos al finalizar cada sesion de laboratorio.
 
 ## Reglas De Seguridad

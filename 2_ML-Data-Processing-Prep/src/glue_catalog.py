@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 
 def _string_columns(names: list[str]) -> List[Dict[str, str]]:
@@ -169,9 +169,64 @@ TABLES: Dict[str, Dict[str, object]] = {
 }
 
 
+def source_key(table_name: str) -> str:
+    return str(TABLES[table_name]["prefix"])
+
+
+def catalog_prefix(table_name: str) -> str:
+    definition = TABLES[table_name]
+    explicit_prefix = definition.get("catalog_prefix")
+    if explicit_prefix:
+        return str(explicit_prefix).strip("/")
+    key = source_key(table_name).strip("/")
+    if key.endswith(".csv"):
+        return key[:-4]
+    return key
+
+
+def catalog_object_key(table_name: str) -> str:
+    key = source_key(table_name).strip("/")
+    filename = key.rsplit("/", 1)[-1]
+    return f"{catalog_prefix(table_name)}/{filename}"
+
+
+def catalog_location(table_name: str, bucket_name: str) -> str:
+    return f"s3://{bucket_name}/{catalog_prefix(table_name)}/"
+
+
+def _is_missing_s3_object(exc: Exception) -> bool:
+    response = getattr(exc, "response", {})
+    error = response.get("Error", {}) if isinstance(response, dict) else {}
+    code = str(error.get("Code", ""))
+    return code in {"404", "NoSuchKey", "NotFound"}
+
+
+def sync_catalog_data(s3_client: Any, bucket_name: str, table_names: Iterable[str] | None = None) -> list[str]:
+    """Copy single-file lab outputs into folder-style prefixes used by Athena."""
+    synced_keys: list[str] = []
+    for table_name in table_names or TABLES:
+        key = source_key(table_name)
+        target_key = catalog_object_key(table_name)
+        if key == target_key:
+            continue
+        try:
+            s3_client.head_object(Bucket=bucket_name, Key=key)
+        except Exception as exc:
+            if _is_missing_s3_object(exc):
+                continue
+            raise
+        s3_client.copy_object(
+            Bucket=bucket_name,
+            CopySource={"Bucket": bucket_name, "Key": key},
+            Key=target_key,
+        )
+        synced_keys.append(target_key)
+    return synced_keys
+
+
 def table_input(table_name: str, bucket_name: str) -> Dict[str, object]:
     definition = TABLES[table_name]
-    location = f"s3://{bucket_name}/{definition['prefix']}"
+    location = catalog_location(table_name, bucket_name)
     return {
         "Name": table_name,
         "TableType": "EXTERNAL_TABLE",
@@ -214,4 +269,3 @@ def register_all_tables(glue_client: Any, database_name: str, bucket_name: str) 
         upsert_table(glue_client, database_name, table_name, bucket_name)
         registered.append(table_name)
     return registered
-

@@ -116,6 +116,9 @@ ENVIRONMENT=lab
 S3_BUCKET_NAME=
 RESOURCE_PREFIX=ml-data-prep-lab
 GLUE_ROLE_ARN=
+GLUE_CRAWLER_NAME=
+GLUE_DATA_QUALITY_RULESET_NAME=
+GLUE_DATA_QUALITY_WORKERS=2
 ```
 
 No guardar credenciales reales en `.env`.
@@ -169,6 +172,17 @@ Comando completo:
 make all-cloud
 ```
 
+Extras AWS nativos opcionales, despues de `make all-cloud`:
+
+```bash
+make glue-crawler
+make glue-data-quality
+make column-stats
+make aws-native-extras
+```
+
+Estos extras no se ejecutan dentro de `make all-cloud` para evitar costos adicionales no esperados. Se documentan en `lab/10_athena_glue_native_features.md`.
+
 ## Cleanup
 
 ```bash
@@ -202,12 +216,15 @@ python -m src.validate_outputs
 
 Que ocurre en cada paso:
 
-- `deploy_infra.sh`: crea bucket S3, Glue Database, Glue Job, IAM Role y CloudWatch Log Group con CloudFormation.
+- `deploy_infra.sh`: crea bucket S3, Glue Database, Glue Job, Glue Crawler, IAM Role y CloudWatch Log Group con CloudFormation.
 - `upload_sample_data.sh`: ejecuta `src.generate_sample_data` y `src.upload_raw_data`; genera CSV sinteticos, sube datos a `raw/` y sube assets del Glue Job a `scripts/`.
-- `python -m src.register_catalog`: registra o actualiza tablas externas en Glue Data Catalog. No genera datos, no sube CSV y no transforma datasets.
+- `python -m src.register_catalog`: registra o actualiza tablas externas en Glue Data Catalog. No genera datos ni transforma datasets; si los CSV ya existen, sincroniza copias bajo prefijos S3 consultables por Athena.
 - `run_processing_job.sh all`: ejecuta el Glue Job para catalogo, profiling, calidad, limpieza, curacion, features, training dataset, inference dataset, lineage y dataset card. El paso `catalog` dentro del job es idempotente.
+- `run_glue_crawler.sh`: ejecuta el Glue Crawler opcional sobre `crawler_demo/` y registra tablas `crawler_*` como ejemplo de descubrimiento automatico.
+- `run_glue_data_quality.sh`: ejecuta Glue Data Quality sobre la tabla `features_training` y guarda resultados en `quality/`.
+- `run_glue_column_statistics.sh`: calcula Glue Data Catalog Column Statistics para columnas clave de `features_training` y guarda una copia en `profiles/`.
 - `download_reports.sh`: descarga reportes desde S3 a `artifacts/local_outputs/`.
-- `python -m src.validate_outputs`: valida objetos esperados en S3 y tablas esperadas en Glue Catalog.
+- `python -m src.validate_outputs`: valida objetos esperados en S3, copias para Athena, tablas esperadas en Glue Catalog y ubicaciones `Location`.
 - `destroy_infra.sh`: vacia el bucket del laboratorio y elimina el stack.
 
 PowerShell:
@@ -244,7 +261,7 @@ s3://<bucket-name>/raw/
 
 ### Catalog
 
-Debe registrar metadata en Glue Data Catalog o ejecutar crawler si se implementa.
+Debe registrar metadata en Glue Data Catalog. El laboratorio usa registro explicito por codigo para las tablas principales y ofrece Glue Crawler como demo opcional para descubrir esquemas desde S3.
 
 ### Profile
 
@@ -261,6 +278,82 @@ Debe generar reportes en:
 ```text
 s3://<bucket-name>/quality/
 ```
+
+El pipeline principal genera `quality/quality_report.json` con reglas Python reproducibles. El extra opcional de Glue Data Quality genera resultados administrados en `quality/aws_glue_data_quality/` y un resumen en `quality/glue_data_quality_result.json`.
+
+Modo de trabajo con Glue Data Quality:
+
+- Ejecutarlo despues de `run_processing_job.sh all`.
+- Validar que exista la tabla `features_training`.
+- Usarlo para ensenar reglas DQDL administradas.
+- Revisar el ruleset `ml-data-prep-lab-features-training-quality`.
+- Revisar `quality/glue_data_quality_result.json` despues de descargar reportes.
+- Tratarlo como complemento del reporte Python; en proyectos reales puede funcionar como quality gate antes de publicar features o entrenar modelos.
+
+### Glue Crawler Opcional
+
+Debe copiar datos raw a:
+
+```text
+s3://<bucket-name>/crawler_demo/
+```
+
+y crear tablas `crawler_*` en Glue Data Catalog. Se ejecuta con:
+
+```bash
+make glue-crawler
+```
+
+Modo de trabajo con Glue Crawler:
+
+- Ejecutarlo despues de `upload_sample_data.sh`.
+- Usarlo para demostrar descubrimiento automatico de esquemas.
+- Revisar el crawler `ml-data-prep-lab-raw-crawler` en AWS Glue Console.
+- Revisar tablas `crawler_*` en Glue Data Catalog.
+- Comparar tablas `crawler_*` contra tablas manuales `raw_*`.
+- Recordar que el crawler no es dependencia del pipeline principal; el pipeline usa tablas manuales porque conoce el contrato de datos y necesita reproducibilidad.
+
+### Athena Opcional
+
+Debe consultar tablas registradas en Glue Data Catalog desde la consola de Athena. La salida de Athena debe configurarse en:
+
+```text
+s3://<bucket-name>/athena-results/
+```
+
+El paso a paso esta en `lab/10_athena_glue_native_features.md`.
+
+Las tablas Glue del laboratorio deben apuntar a prefijos S3 tipo carpeta. Por ejemplo:
+
+```text
+features_training Location: s3://<bucket-name>/features/training_dataset/
+Objeto leido por Athena: s3://<bucket-name>/features/training_dataset/training_dataset.csv
+```
+
+El archivo simple `s3://<bucket-name>/features/training_dataset.csv` tambien existe para descarga directa y compatibilidad con los pasos del pipeline.
+
+### Column Statistics Opcional
+
+Debe calcular estadisticas administradas para `features_training` con Glue Data Catalog Column Statistics:
+
+```bash
+make column-stats
+```
+
+La copia del resultado para lectura del estudiante queda en:
+
+```text
+s3://<bucket-name>/profiles/glue_column_statistics_features_training.json
+```
+
+Modo de trabajo con Column Statistics:
+
+- Ejecutarlo despues de `run_processing_job.sh all` y catalogo actualizado.
+- Usarlo para mostrar estadisticas administradas del Glue Data Catalog.
+- Revisar la seccion `Column statistics` de la tabla `features_training`.
+- Explicar que el laboratorio calcula solo columnas clave para reducir costo y ruido.
+- Revisar `profiles/glue_column_statistics_features_training.json` despues de descargar reportes.
+- Usarlo como complemento de `profiles/profile.json`, no como reemplazo de profiling ML ni reglas de calidad.
 
 ### Process
 
@@ -377,11 +470,68 @@ bash scripts/deploy_infra.sh
 
 Desde la version actual del deploy, los stacks nuevos usan `OnFailure=DO_NOTHING` para preservar eventos de diagnostico. El cleanup sigue siendo explicito con `destroy_infra`.
 
+### Glue Data Quality Ruleset Falla Durante Deploy
+
+Sintoma en eventos de CloudFormation:
+
+```text
+GlueFeaturesTrainingQualityRuleset AWS::Glue::DataQualityRuleset CREATE_FAILED Internal Failure
+```
+
+Accion:
+
+- Actualizar el template a la version donde Glue Data Quality se crea bajo demanda con `make glue-data-quality`.
+- Eliminar el stack fallido:
+
+```bash
+python -m src.destroy_infra
+```
+
+- Reintentar deploy:
+
+```bash
+bash scripts/deploy_infra.sh
+```
+
+El ruleset `ml-data-prep-lab-features-training-quality` se crea despues, cuando ejecutes:
+
+```bash
+make glue-data-quality
+```
+
 ### Bucket Ya Existe
 
 Sintoma: `BucketAlreadyExists`.
 
 Accion: pasar un nombre unico o permitir que IaC genere uno con account id y region.
+
+### Cleanup Falla Con `NoSuchBucket`
+
+Sintoma:
+
+```text
+NoSuchBucket: The specified bucket does not exist
+```
+
+Causa probable:
+
+- CloudFormation conserva una referencia fisica a un bucket de un intento fallido.
+- El bucket fue eliminado o nunca termino de crearse.
+
+Accion:
+
+- Usar la version actual de `src.destroy_infra`, que ignora `NoSuchBucket` durante el vaciado y continua con `delete_stack`.
+- Reintentar:
+
+```bash
+python -m src.destroy_infra
+```
+
+- Si despues aparece un fallo IAM al borrar el rol Glue, usar:
+
+```bash
+python -m src.destroy_infra --retain-glue-role
+```
 
 ### Error De Acceso A S3
 
@@ -477,6 +627,168 @@ s3://<bucket>/scripts/ml_data_prep_src.zip
 ```
 
 y arranca un nuevo Glue Job.
+
+### Glue Crawler Falla
+
+Accion:
+
+- Confirmar que existe `s3://<bucket>/raw/`.
+- Ejecutar primero `bash scripts/upload_sample_data.sh`.
+- Confirmar que el rol Glue puede leer y escribir `crawler_demo/`.
+- Revisar el crawler `ml-data-prep-lab-raw-crawler` en AWS Glue Console.
+
+### Glue Data Quality Falla
+
+Accion:
+
+- Confirmar que ya existe `s3://<bucket>/features/training_dataset.csv`.
+- Ejecutar primero `bash scripts/run_processing_job.sh all`.
+- Confirmar permisos del deployer para `glue:StartDataQualityRulesetEvaluationRun` y `iam:PassRole`.
+- Revisar el ruleset `ml-data-prep-lab-features-training-quality` en AWS Glue Console.
+
+Si el error contiene:
+
+```text
+LAUNCH ERROR | Error downloading from S3 for bucket: aws-glue-ml-data-quality-assets-<region>
+Access Denied
+```
+
+el rol de ejecucion de Glue Data Quality necesita leer los assets administrados de AWS Glue Data Quality:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "s3:GetObject",
+  "Resource": "arn:aws:s3:::aws-glue-ml-data-quality-assets-<region>/*"
+}
+```
+
+Si el rol lo administra este stack, actualizar la policy con:
+
+```bash
+bash scripts/deploy_infra.sh
+```
+
+Luego reintentar:
+
+```bash
+bash scripts/run_glue_data_quality.sh
+```
+
+Si se usa `GLUE_ROLE_ARN` con un rol precreado, pedir al administrador que agregue ese permiso al rol precreado.
+
+Si el error contiene:
+
+```text
+not authorized to perform: glue:GetDataQualityRulesetEvaluationRun
+```
+
+el rol de ejecucion de Glue Data Quality necesita permisos Glue Data Quality sobre el ruleset:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": [
+    "glue:GetDataQualityRuleset",
+    "glue:GetDataQualityRulesetEvaluationRun",
+    "glue:GetDataQualityResult",
+    "glue:PublishDataQuality"
+  ],
+  "Resource": "arn:aws:glue:<region>:<account-id>:dataQualityRuleset/*"
+}
+```
+
+Si el rol lo administra este stack, actualizar:
+
+```bash
+bash scripts/deploy_infra.sh
+```
+
+Luego reintentar:
+
+```bash
+bash scripts/run_glue_data_quality.sh
+```
+
+Si el error contiene:
+
+```text
+InvalidInputException: A resource with the same resourceName but a different internalId already exists
+```
+
+significa que el ruleset se creo en un intento anterior, pero la evaluacion fallo despues. La version actual de `src.run_glue_data_quality` detecta ese ruleset y lo actualiza en vez de crearlo de nuevo. Reintentar:
+
+```bash
+bash scripts/run_glue_data_quality.sh
+```
+
+### Glue Column Statistics Falla
+
+Accion:
+
+- Confirmar que la tabla `features_training` existe en Glue Data Catalog.
+- Ejecutar `python -m src.register_catalog`.
+- Confirmar permisos `glue:StartColumnStatisticsTaskRun`, `glue:GetColumnStatisticsTaskRuns` y `iam:PassRole`.
+- Revisar la seccion `Column statistics` de la tabla en Glue Console.
+
+Si el error contiene:
+
+```text
+Unable to Validate access to underlying S3 path
+```
+
+el rol usado en `StartColumnStatisticsTaskRun` no puede validar la ubicacion S3 de la tabla. El rol necesita `s3:ListBucket` y `s3:GetBucketLocation` sobre el bucket del laboratorio, y `s3:GetObject` sobre los objetos de datos.
+
+Si el rol lo administra este stack, actualizar:
+
+```bash
+bash scripts/deploy_infra.sh
+```
+
+Luego reintentar:
+
+```bash
+bash scripts/run_glue_column_statistics.sh
+```
+
+Si se usa `GLUE_ROLE_ARN` con un rol precreado, pedir al administrador que agregue esos permisos S3 al rol.
+
+### Athena Devuelve 0 Filas Aunque `validate_outputs` Pasaba
+
+Sintoma:
+
+```sql
+SELECT split, COUNT(*) AS rows
+FROM features_training
+GROUP BY split
+ORDER BY split;
+```
+
+termina correctamente, pero muestra `Results (0)`.
+
+Causas probables:
+
+- La tabla Glue existe, pero su `Location` apunta a un objeto CSV individual en vez de a un prefijo S3.
+- Las copias bajo prefijos de tabla aun no se sincronizaron.
+- Athena esta reutilizando un resultado anterior.
+- Se esta usando otra region, database o workgroup.
+
+Accion:
+
+```bash
+python -m src.register_catalog
+python -m src.validate_outputs
+```
+
+Si faltan outputs procesados:
+
+```bash
+bash scripts/run_processing_job.sh all
+python -m src.register_catalog
+python -m src.validate_outputs
+```
+
+Luego en Athena desactivar temporalmente `Reuse query results` o pulsar `Run again`.
 
 ### SageMaker Processing Job Falla
 

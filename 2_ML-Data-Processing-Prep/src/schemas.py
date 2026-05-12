@@ -103,5 +103,6 @@ S3_ZONES = [
     "reports",
     "logs",
     "scripts",
+    "crawler_demo",
+    "athena-results",
 ]
-

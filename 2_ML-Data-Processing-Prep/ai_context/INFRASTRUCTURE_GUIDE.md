@@ -22,6 +22,10 @@ La implementacion del laboratorio usa:
 - Amazon S3 como data lake.
 - AWS Glue Data Catalog como catalogo.
 - AWS Glue Python Shell Job como motor cloud de procesamiento.
+- AWS Glue Crawler como demo opcional de descubrimiento de esquemas.
+- AWS Glue Data Quality Ruleset como demo opcional de validacion administrada.
+- AWS Glue Data Catalog Column Statistics como demo opcional de estadisticas administradas.
+- Amazon Athena como demo opcional de consulta SQL sobre tablas catalogadas.
 - CloudWatch Logs para operacion.
 - IAM Role de Glue con minimo privilegio sobre recursos del laboratorio.
 
@@ -37,7 +41,9 @@ Recursos base esperados:
 - Rol IAM para procesamiento.
 - Politicas IAM de minimo privilegio.
 - Log group de CloudWatch.
-- Glue Crawler opcional.
+- Glue Crawler opcional, ejecutado bajo demanda.
+- Glue Data Quality Ruleset opcional, ejecutado bajo demanda.
+- Glue Data Catalog Column Statistics opcional, ejecutado bajo demanda.
 - Glue Job o SageMaker Processing Job.
 - KMS key opcional.
 - SageMaker Feature Store opcional o preparado para extension.
@@ -75,6 +81,8 @@ Ejemplos:
 - Glue Database: `ml_data_prep_lab`
 - IAM Role: `ml-data-prep-lab-processing-role`
 - CloudWatch Log Group: `/aws/ml-data-prep-lab/processing`
+- Glue Crawler: `ml-data-prep-lab-raw-crawler`
+- Glue Data Quality Ruleset: `ml-data-prep-lab-features-training-quality`
 
 Los nombres deben evitar valores globalmente conflictivos cuando aplique, especialmente S3.
 
@@ -119,8 +127,12 @@ Opcionales:
 Las politicas deben limitarse a:
 
 - Lectura en `s3://<bucket>/raw/*`.
+- Lectura y escritura controlada en `s3://<bucket>/crawler_demo/*` para el demo de Glue Crawler.
+- Escritura controlada en `s3://<bucket>/athena-results/*` para resultados de Athena.
+- Escritura controlada en `s3://<bucket>/quality/aws_glue_data_quality/*` para resultados de Glue Data Quality.
 - Escritura en `s3://<bucket>/cleaned/*`, `curated/*`, `features/*`, `inference/*`, `profiles/*`, `quality/*`, `lineage/*`, `reports/*` y `logs/*`.
 - Acceso minimo a Glue Data Catalog requerido para crear o leer tablas.
+- Acceso minimo a Glue Data Quality y Column Statistics cuando se ejecuten los extras opcionales.
 - Escritura de logs en CloudWatch para el log group del laboratorio.
 - Uso de KMS solo sobre la key del laboratorio si KMS esta habilitado.
 
@@ -173,6 +185,20 @@ El crawler puede descubrir esquemas en S3, pero no debe ser obligatorio si aumen
 - Ejecutarlo bajo demanda.
 - Documentar costo y cleanup.
 
+La implementacion actual crea un crawler opcional que lee `crawler_demo/customers/`, `crawler_demo/transactions/` y `crawler_demo/inference_transactions/`. El script `src.run_glue_crawler` copia los CSV desde `raw/` a esos prefixes para que el crawler genere una tabla por fuente.
+
+## Glue Data Quality Opcional
+
+Glue Data Quality puede complementar las validaciones Python del pipeline con reglas administradas DQDL. Debe ejecutarse bajo demanda sobre tablas ya generadas, por ejemplo `features_training`.
+
+La implementacion actual crea o actualiza un ruleset basico bajo demanda con `src.run_glue_data_quality`, en vez de crearlo durante CloudFormation. Esta decision evita fallos transitorios de `AWS::Glue::DataQualityRuleset` durante el deploy y mantiene Glue Data Quality como demo explicito despues del pipeline principal. El resultado administrado queda en `quality/aws_glue_data_quality/` y una copia resumida queda en `quality/glue_data_quality_result.json`.
+
+## Glue Data Catalog Column Statistics Opcional
+
+Column Statistics debe usarse como complemento de catalogacion y performance de consultas. No reemplaza el profiling ML del laboratorio.
+
+La implementacion actual calcula estadisticas para columnas clave de `features_training` con `src.run_glue_column_statistics` y guarda una copia en `profiles/glue_column_statistics_features_training.json`.
+
 ## Glue Job O SageMaker Processing Job
 
 La implementacion debe elegir una ruta principal:
@@ -180,7 +206,30 @@ La implementacion debe elegir una ruta principal:
 - SageMaker Processing Job para scripts Python/pandas y datasets pequenos.
 - Glue Job para ETL Spark o integracion Glue mas fuerte.
 
-La ruta recomendada inicial es SageMaker Processing con codigo Python modular y salidas en S3, manteniendo Glue Data Catalog como catalogo.
+La ruta recomendada inicial de esta implementacion es AWS Glue Python Shell Job con codigo Python modular y salidas en S3, manteniendo Glue Data Catalog como catalogo. SageMaker Processing sigue siendo una alternativa valida para futuros laboratorios donde se quiera acercar el procesamiento a SageMaker training, Feature Store o Pipelines.
+
+## Un Job Modular Vs Varios Jobs
+
+La decision actual es usar un solo Glue Job modular para reducir costo, simplificar el despliegue y facilitar la ensenanza. Los limites logicos se expresan con pasos como `process`, `features`, `training-dataset` e `inference-dataset`.
+
+Para una version productiva, es valido separar el procesamiento en jobs por capa:
+
+```text
+raw -> cleaned
+cleaned -> curated
+curated -> features
+```
+
+Usar varios jobs cuando las etapas tengan contratos independientes, escalas distintas, owners diferentes, permisos separados, reintentos aislados o gates de calidad entre capas. Evitar dividir de forma prematura si el volumen es pequeno o si la orquestacion agrega complejidad sin beneficio claro.
+
+Si se implementan varios jobs en el futuro, documentar:
+
+- Orquestador elegido: Glue Workflows, Glue Triggers, Step Functions o SageMaker Pipelines.
+- Inputs y outputs S3 de cada job.
+- Formato de salida recomendado, preferentemente Parquet u ORC para capas procesadas.
+- Reglas de calidad por frontera de capa.
+- Estrategia de reintentos, idempotencia y cleanup.
+- Lineage por etapa y relacion con futuros laboratorios de entrenamiento e inferencia.
 
 ## SageMaker Feature Store Opcional
 
@@ -215,6 +264,9 @@ Pueden generar costos segun uso, volumen y tiempo:
 - S3 por almacenamiento, requests y transferencia.
 - Glue Jobs por tiempo de ejecucion y capacidad.
 - Glue Crawlers por ejecucion.
+- Glue Data Quality por evaluacion.
+- Glue Data Catalog Column Statistics por ejecucion.
+- Athena por datos escaneados.
 - SageMaker Processing Jobs por instancia y duracion.
 - SageMaker Feature Store por almacenamiento offline y online si se habilita.
 - CloudWatch Logs por ingesta y retencion.

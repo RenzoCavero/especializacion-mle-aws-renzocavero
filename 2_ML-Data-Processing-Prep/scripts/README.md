@@ -63,11 +63,14 @@ Esta tabla conecta cada comando operativo con el modulo Python que ejecuta, el c
 |---|---|---|---|---|---|
 | Desplegar infraestructura | `bash scripts/deploy_infra.sh` | `python -m src.deploy_infra` | `lab/01_aws_setup.md`, `lab/09_cost_security_cleanup.md`, `infra/README.md` | CloudFormation, S3, IAM, Glue, CloudWatch Logs | Stack `ml-data-prep-lab-stack`, bucket S3, Glue Database, Glue Job, rol IAM y log group |
 | Generar datos sinteticos | Incluido en `bash scripts/upload_sample_data.sh` | `python -m src.generate_sample_data` | `lab/00_contexto_negocio.md`, `lab/04_data_quality_profiling.md` | Local filesystem | CSV en `data/sample/customers.csv`, `data/sample/transactions.csv`, `data/sample/inference_transactions.csv` |
-| Subir datos raw y assets Glue | `bash scripts/upload_sample_data.sh` | `python -m src.upload_raw_data` | `lab/02_data_lake_s3.md`, `lab/05_processing_jobs.md` | Amazon S3 | Datos en `s3://<bucket>/raw/` y assets en `s3://<bucket>/scripts/` |
-| Registrar catalogo | Sin `.sh` dedicado; incluido en `run_all_cloud.sh` | `python -m src.register_catalog` | `lab/03_glue_catalog.md` | AWS Glue Data Catalog | Tablas `raw_*`, `cleaned_*`, `curated_*`, `features_*` registradas o actualizadas |
+| Subir datos raw y assets Glue | `bash scripts/upload_sample_data.sh` | `python -m src.upload_raw_data` | `lab/02_data_lake_s3.md`, `lab/05_processing_jobs.md` | Amazon S3 | Datos en `s3://<bucket>/raw/`, copias raw para Athena y assets en `s3://<bucket>/scripts/` |
+| Registrar catalogo | Sin `.sh` dedicado; incluido en `run_all_cloud.sh` | `python -m src.register_catalog` | `lab/03_glue_catalog.md` | AWS Glue Data Catalog, S3 | Tablas `raw_*`, `cleaned_*`, `curated_*`, `features_*` registradas o actualizadas, con `Location` apuntando a prefijos S3 consultables por Athena |
 | Ejecutar pipeline cloud | `bash scripts/run_processing_job.sh <steps>` | `python -m src.run_processing_job --steps <steps>` | `lab/03_glue_catalog.md`, `lab/04_data_quality_profiling.md`, `lab/05_processing_jobs.md`, `lab/06_feature_engineering.md`, `lab/07_training_serving_consistency.md`, `lab/08_governance_lineage.md` | AWS Glue Job, S3, Glue Data Catalog, CloudWatch Logs | Outputs en `profiles/`, `quality/`, `cleaned/`, `curated/`, `features/`, `inference/`, `lineage/`, `reports/`, `logs/` |
+| Ejecutar Glue Crawler demo | `bash scripts/run_glue_crawler.sh` | `python -m src.run_glue_crawler` | `lab/03_glue_catalog.md`, `lab/10_athena_glue_native_features.md` | AWS Glue Crawler, S3, Glue Data Catalog | Datos copiados a `crawler_demo/`, tablas `crawler_*` y reporte `reports/glue_crawler_report.json` |
+| Ejecutar Glue Data Quality | `bash scripts/run_glue_data_quality.sh` | `python -m src.run_glue_data_quality` | `lab/04_data_quality_profiling.md`, `lab/10_athena_glue_native_features.md` | AWS Glue Data Quality, Glue Data Catalog, S3 | Resultado administrado en `quality/aws_glue_data_quality/` y resumen `quality/glue_data_quality_result.json` |
+| Calcular Column Statistics | `bash scripts/run_glue_column_statistics.sh` | `python -m src.run_glue_column_statistics` | `lab/03_glue_catalog.md`, `lab/10_athena_glue_native_features.md` | AWS Glue Data Catalog Column Statistics | Estadisticas en Glue Catalog y copia `profiles/glue_column_statistics_features_training.json` |
 | Descargar reportes | `bash scripts/download_reports.sh` | `python -m src.download_reports` | `lab/04_data_quality_profiling.md`, `lab/08_governance_lineage.md` | Amazon S3 | Copia local en `artifacts/local_outputs/` |
-| Validar outputs | Sin `.sh` dedicado; incluido en `run_all_cloud.sh` | `python -m src.validate_outputs` | `lab/05_processing_jobs.md`, `lab/09_cost_security_cleanup.md` | S3, Glue Data Catalog | Validacion de objetos S3 esperados y tablas Glue esperadas |
+| Validar outputs | Sin `.sh` dedicado; incluido en `run_all_cloud.sh` | `python -m src.validate_outputs` | `lab/05_processing_jobs.md`, `lab/09_cost_security_cleanup.md` | S3, Glue Data Catalog | Validacion de objetos S3 esperados, copias para Athena, tablas Glue y ubicaciones `Location` |
 | Ejecutar laboratorio completo | `bash scripts/run_all_cloud.sh` | `src.deploy_infra`, `src.generate_sample_data`, `src.upload_raw_data`, `src.register_catalog`, `src.run_processing_job`, `src.download_reports`, `src.validate_outputs` | Todo `lab/*.md` | CloudFormation, S3, IAM, Glue, CloudWatch Logs | Laboratorio completo desplegado, ejecutado, descargado y validado |
 | Destruir infraestructura | `bash scripts/destroy_infra.sh` | `python -m src.destroy_infra` | `lab/09_cost_security_cleanup.md` | CloudFormation, S3, IAM, Glue, CloudWatch Logs | Bucket vaciado y stack eliminado |
 
@@ -75,6 +78,7 @@ Notas:
 
 - `upload_sample_data.sh` combina dos modulos: primero genera datos sinteticos y luego los sube a S3.
 - `register_catalog` no tiene script Bash dedicado porque es un paso liviano y tambien se ejecuta dentro de `run_all_cloud.sh`.
+- Las tablas Glue apuntan a prefijos S3 tipo carpeta. Por ejemplo, `features_training` usa `s3://<bucket>/features/training_dataset/`, que contiene una copia `training_dataset.csv`. Esto permite consultar la tabla desde Athena.
 - `validate_outputs` no tiene script Bash dedicado porque normalmente se ejecuta al final del flujo completo.
 - `run_processing_job.sh all` tambien ejecuta el paso `catalog` dentro de Glue, de forma idempotente.
 
@@ -89,6 +93,152 @@ python -m src.register_catalog
 bash scripts/run_processing_job.sh all
 bash scripts/download_reports.sh
 python -m src.validate_outputs
+```
+
+Para clase, si quieres conectar el laboratorio con Glue Crawler, Glue Data Quality, Column Statistics y Athena, usa esta secuencia extendida:
+
+```bash
+bash scripts/deploy_infra.sh
+bash scripts/upload_sample_data.sh
+python -m src.register_catalog
+bash scripts/run_glue_crawler.sh
+bash scripts/run_processing_job.sh all
+bash scripts/run_glue_data_quality.sh
+bash scripts/run_glue_column_statistics.sh
+bash scripts/download_reports.sh
+python -m src.validate_outputs
+```
+
+La razon del orden:
+
+- El crawler necesita datos en `raw/`; por eso corre despues de `upload_sample_data.sh`.
+- El Glue Job principal escribe `cleaned/`, `curated/`, `features/` e `inference/`.
+- Glue Data Quality y Column Statistics del laboratorio apuntan a `features_training`; por eso corren despues de `run_processing_job.sh all`.
+- `download_reports.sh` conviene ejecutarlo despues de los extras para traer tambien sus reportes.
+
+## Como Trabajar Con Los Extras Nativos De Glue
+
+Los tres scripts siguientes no reemplazan el pipeline principal. Sirven para mostrar capacidades administradas de AWS Glue sobre datos ya generados.
+
+| Script | Cuando ejecutarlo | Que valida o descubre | Donde verlo en AWS | Output del laboratorio |
+|---|---|---|---|---|
+| `bash scripts/run_glue_crawler.sh` | Despues de `upload_sample_data.sh` | Descubre esquemas desde copias raw en `crawler_demo/` | AWS Glue > Data Catalog > Crawlers y Tables | `reports/glue_crawler_report.json` |
+| `bash scripts/run_glue_data_quality.sh` | Despues de `run_processing_job.sh all` | Evalua reglas DQDL sobre `features_training` | AWS Glue > Data quality | `quality/glue_data_quality_result.json` |
+| `bash scripts/run_glue_column_statistics.sh` | Despues de `run_processing_job.sh all` y catalogo actualizado | Calcula estadisticas administradas para columnas clave | AWS Glue > Tables > `features_training` > Column statistics | `profiles/glue_column_statistics_features_training.json` |
+
+### Glue Crawler En La Practica
+
+Usalo para ensenar descubrimiento automatico:
+
+```bash
+bash scripts/run_glue_crawler.sh
+```
+
+El script copia:
+
+```text
+raw/customers.csv -> crawler_demo/customers/customers.csv
+raw/transactions.csv -> crawler_demo/transactions/transactions.csv
+raw/inference_transactions.csv -> crawler_demo/inference_transactions/inference_transactions.csv
+```
+
+Luego ejecuta el crawler `ml-data-prep-lab-raw-crawler`. El resultado esperado son tablas:
+
+```text
+crawler_customers
+crawler_transactions
+crawler_inference_transactions
+```
+
+Usalo para comparar `crawler_transactions` contra `raw_transactions`. La tabla `raw_transactions` es manual y deterministica; `crawler_transactions` es inferida por AWS.
+
+### Glue Data Quality En La Practica
+
+Usalo para ensenar reglas administradas:
+
+```bash
+bash scripts/run_glue_data_quality.sh
+```
+
+El script:
+
+1. Verifica que exista `features/training_dataset.csv`.
+2. Actualiza tablas Glue.
+3. Crea o actualiza el ruleset `ml-data-prep-lab-features-training-quality`.
+4. Ejecuta la evaluacion administrada.
+5. Guarda un resumen descargable.
+
+Reglas principales:
+
+```text
+transaction_id completo
+customer_id completo
+amount completo y mayor que 0
+is_fraud completo y en [0, 1]
+split en train, validation o test
+```
+
+Si falla, revisa `quality/glue_data_quality_result.json` y el panel `Data quality` de AWS Glue.
+
+### Glue Column Statistics En La Practica
+
+Usalo para ensenar estadisticas administradas del catalogo:
+
+```bash
+bash scripts/run_glue_column_statistics.sh
+```
+
+El script calcula estadisticas para seis columnas:
+
+```text
+amount
+amount_log
+customer_txn_count
+amount_to_customer_avg
+is_fraud
+split
+```
+
+Si en la consola ves `Column statistics (6)` aunque el schema tenga mas columnas, es esperado. El laboratorio limita las columnas para reducir costo, tiempo y ruido didactico. Para ampliar la lista, edita `COLUMN_NAMES` en:
+
+```text
+src/run_glue_column_statistics.py
+```
+
+### Comandos CLI Utiles
+
+Crawler:
+
+```bash
+aws glue get-crawler \
+  --name ml-data-prep-lab-raw-crawler \
+  --profile mlops-2-data-prep-lab \
+  --region us-east-1
+```
+
+Data Quality rulesets:
+
+```bash
+aws glue list-data-quality-rulesets \
+  --profile mlops-2-data-prep-lab \
+  --region us-east-1
+```
+
+Column Statistics:
+
+```bash
+aws glue get-column-statistics-for-table \
+  --database-name ml_data_prep_lab \
+  --table-name features_training \
+  --column-names amount amount_log customer_txn_count amount_to_customer_avg is_fraud split \
+  --profile mlops-2-data-prep-lab \
+  --region us-east-1
+```
+
+Mas detalle en:
+
+```text
+lab/10_athena_glue_native_features.md
 ```
 
 Al terminar:
@@ -180,6 +330,14 @@ data/sample/transactions.csv -> s3://<bucket>/raw/transactions.csv
 data/sample/inference_transactions.csv -> s3://<bucket>/raw/inference_transactions.csv
 ```
 
+- Crea copias bajo prefijos tipo carpeta para que las tablas raw puedan consultarse con Athena:
+
+```text
+s3://<bucket>/raw/customers/customers.csv
+s3://<bucket>/raw/transactions/transactions.csv
+s3://<bucket>/raw/inference_transactions/inference_transactions.csv
+```
+
 - Empaqueta el codigo de `src/` en `data/local_cache/ml_data_prep_src.zip`.
 - Sube assets del Glue Job a:
 
@@ -203,6 +361,7 @@ Hace lo siguiente:
 
 - Lee el bucket y la base Glue desde el stack o `.env`.
 - Registra tablas CSV apuntando a rutas S3.
+- Sincroniza copias de archivos existentes bajo prefijos consultables por Athena.
 - Usa operaciones tipo upsert: crea la tabla si no existe o la actualiza si ya existe.
 
 Tablas principales:
@@ -218,7 +377,20 @@ features_training
 features_inference
 ```
 
-No transforma datos y no ejecuta Glue Job. Solo registra metadata.
+No genera datos sinteticos, no transforma datasets y no ejecuta Glue Job. Las copias que crea son copias 1:1 de archivos ya existentes para que Glue/Athena trabajen con `Location` tipo prefijo.
+
+Ejemplo:
+
+```text
+Archivo simple del laboratorio:
+s3://<bucket>/features/training_dataset.csv
+
+Prefijo de tabla para Glue/Athena:
+s3://<bucket>/features/training_dataset/training_dataset.csv
+
+Location de la tabla features_training:
+s3://<bucket>/features/training_dataset/
+```
 
 Relacionado con:
 
@@ -246,6 +418,99 @@ Relacionado con:
 - `lab/06_feature_engineering.md`
 - `lab/07_training_serving_consistency.md`
 - `lab/08_governance_lineage.md`
+
+### `python -m src.run_glue_crawler`
+
+Ejecuta un ejemplo de AWS Glue Crawler sobre una copia controlada de los datos raw.
+
+Hace lo siguiente:
+
+- Verifica que existan datos en `s3://<bucket>/raw/`.
+- Copia los CSV raw a prefixes separados para que el crawler cree una tabla por fuente:
+
+```text
+s3://<bucket>/crawler_demo/customers/customers.csv
+s3://<bucket>/crawler_demo/transactions/transactions.csv
+s3://<bucket>/crawler_demo/inference_transactions/inference_transactions.csv
+```
+
+- Inicia el crawler `ml-data-prep-lab-raw-crawler`.
+- Espera a que termine.
+- Lista las tablas creadas con prefijo `crawler_`.
+- Guarda un resumen en:
+
+```text
+s3://<bucket>/reports/glue_crawler_report.json
+```
+
+Este paso muestra descubrimiento automatico de esquemas. El pipeline principal usa tablas definidas por codigo porque ya conoce el contrato de datos y asi es mas reproducible.
+
+Relacionado con:
+
+- `lab/03_glue_catalog.md`
+- `lab/10_athena_glue_native_features.md`
+
+### `python -m src.run_glue_data_quality`
+
+Ejecuta reglas basicas de AWS Glue Data Quality sobre la tabla `features_training`.
+
+Prerequisito: el pipeline principal debe haber generado:
+
+```text
+s3://<bucket>/features/training_dataset.csv
+```
+
+Hace lo siguiente:
+
+- Registra o actualiza las tablas del Glue Data Catalog.
+- Crea o actualiza el ruleset `ml-data-prep-lab-features-training-quality`.
+- Ejecuta una evaluacion administrada de Glue Data Quality sobre `features_training`.
+- Espera el resultado.
+- Guarda un resumen del run y de las reglas en:
+
+```text
+s3://<bucket>/quality/glue_data_quality_result.json
+```
+
+Las salidas administradas de Glue quedan bajo:
+
+```text
+s3://<bucket>/quality/aws_glue_data_quality/
+```
+
+Relacionado con:
+
+- `lab/04_data_quality_profiling.md`
+- `lab/10_athena_glue_native_features.md`
+
+### `python -m src.run_glue_column_statistics`
+
+Calcula estadisticas administradas de columnas en AWS Glue Data Catalog para `features_training`.
+
+Prerequisito: el pipeline principal debe haber generado y registrado:
+
+```text
+s3://<bucket>/features/training_dataset.csv
+```
+
+Hace lo siguiente:
+
+- Registra o actualiza las tablas del Glue Data Catalog.
+- Inicia una tarea `StartColumnStatisticsTaskRun`.
+- Calcula estadisticas para columnas numericas y categoricas clave.
+- Consulta el resultado desde Glue Catalog.
+- Guarda una copia para lectura del estudiante en:
+
+```text
+s3://<bucket>/profiles/glue_column_statistics_features_training.json
+```
+
+Estas estadisticas ayudan al optimizador de consultas y complementan, pero no reemplazan, el profiling ML del pipeline.
+
+Relacionado con:
+
+- `lab/03_glue_catalog.md`
+- `lab/10_athena_glue_native_features.md`
 
 ### `python -m src.download_reports`
 
@@ -279,7 +544,9 @@ Valida que el laboratorio produjo los objetos y tablas esperados.
 Revisa:
 
 - Objetos esperados en S3.
+- Copias S3 bajo prefijos consultables por Athena.
 - Tablas esperadas en Glue Data Catalog.
+- Que el `Location` de cada tabla Glue apunte al prefijo correcto.
 
 Si falta algo, falla con una lista de objetos o tablas ausentes.
 
@@ -382,6 +649,10 @@ PROJECT_NAME=ml-data-processing-prep
 ENVIRONMENT=lab
 S3_BUCKET_NAME=
 RESOURCE_PREFIX=ml-data-prep-lab
+GLUE_DATABASE_NAME=ml_data_prep_lab
+GLUE_CRAWLER_NAME=
+GLUE_DATA_QUALITY_RULESET_NAME=
+GLUE_DATA_QUALITY_WORKERS=2
 GLUE_ROLE_ARN=
 ```
 
@@ -461,6 +732,10 @@ No necesitas ejecutar `bash scripts/deploy_infra.sh` otra vez para este caso, po
 | `make data` | `python -m src.generate_sample_data` |
 | `make upload-raw` | `python -m src.upload_raw_data` o `bash scripts/upload_sample_data.sh` si tambien quieres regenerar datos antes |
 | `make catalog` | `python -m src.register_catalog` |
+| `make glue-crawler` | `bash scripts/run_glue_crawler.sh` |
+| `make glue-data-quality` | `bash scripts/run_glue_data_quality.sh` |
+| `make column-stats` | `bash scripts/run_glue_column_statistics.sh` |
+| `make aws-native-extras` | `bash scripts/run_glue_crawler.sh`, `bash scripts/run_glue_data_quality.sh`, `bash scripts/run_glue_column_statistics.sh` |
 | `make profile` | `bash scripts/run_processing_job.sh profile` |
 | `make quality` | `bash scripts/run_processing_job.sh quality` |
 | `make process` | `bash scripts/run_processing_job.sh process` |
@@ -491,3 +766,4 @@ Para entender los reportes:
 2. `lab/06_feature_engineering.md`
 3. `lab/07_training_serving_consistency.md`
 4. `lab/08_governance_lineage.md`
+5. `lab/10_athena_glue_native_features.md`

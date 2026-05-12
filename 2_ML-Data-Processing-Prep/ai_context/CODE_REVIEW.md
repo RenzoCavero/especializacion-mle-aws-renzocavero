@@ -17,6 +17,11 @@ Usar este checklist antes de cerrar cualquier tarea del laboratorio.
 - Existe comando de cleanup?
 - Se usa Amazon S3 como data lake?
 - Se usa AWS Glue Data Catalog o queda claramente implementado?
+- Si se agregan extras AWS nativos, se documenta si son opcionales y por que no corren dentro de `make all-cloud`?
+- Si se usa Glue Crawler, esta limitado a prefixes del laboratorio y se ejecuta bajo demanda?
+- Si se usa Glue Data Quality, las reglas estan documentadas y apuntan a una tabla generada por el pipeline?
+- Si se usa Glue Data Catalog Column Statistics, queda claro que complementa el profiling y no lo reemplaza?
+- Si se usa Athena, se documenta la ubicacion de resultados y consultas basicas seguras?
 - Se usa Glue Job o SageMaker Processing Job para procesamiento cloud?
 - Se guardan logs operativos en CloudWatch?
 - La solucion evita recursos persistentes innecesarios?

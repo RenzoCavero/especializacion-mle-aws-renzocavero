@@ -20,8 +20,11 @@
     "ParameterValue": "ml_data_prep_lab"
   },
   {
+    "ParameterKey": "ExistingGlueRoleArn",
+    "ParameterValue": ""
+  },
+  {
     "ParameterKey": "LogRetentionDays",
     "ParameterValue": "14"
   }
 ]
-

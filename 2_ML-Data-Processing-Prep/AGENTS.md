@@ -87,6 +87,10 @@ Recursos AWS esperados:
 
 - Amazon S3 para data lake y artefactos.
 - AWS Glue Data Catalog para catalogacion.
+- AWS Glue Crawler como demo opcional de descubrimiento de esquemas.
+- AWS Glue Data Quality como demo opcional de reglas administradas.
+- AWS Glue Data Catalog Column Statistics como demo opcional de estadisticas administradas.
+- Amazon Athena como demo opcional de consultas SQL sobre tablas catalogadas.
 - AWS Glue Job o SageMaker Processing Job para procesamiento.
 - SageMaker Feature Store como componente opcional o preparado para extension.
 - IAM Roles y Policies con minimo privilegio.

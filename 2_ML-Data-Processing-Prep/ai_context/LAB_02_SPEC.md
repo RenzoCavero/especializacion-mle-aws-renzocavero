@@ -50,6 +50,10 @@ El flujo debe cubrir:
 
 - Amazon S3 para data lake y artefactos.
 - AWS Glue Data Catalog para catalogacion.
+- AWS Glue Crawler como ejemplo opcional de descubrimiento de esquemas.
+- AWS Glue Data Quality como ejemplo opcional de reglas administradas.
+- AWS Glue Data Catalog Column Statistics como ejemplo opcional de estadisticas administradas.
+- Amazon Athena como ejemplo opcional de consulta SQL sobre tablas catalogadas.
 - AWS Glue Job o SageMaker Processing Job para procesamiento.
 - SageMaker Feature Store como componente opcional o preparado para extension.
 - IAM Roles y Policies con minimo privilegio.
@@ -108,6 +112,8 @@ s3://<bucket-name>/
 |-- quality/
 |-- lineage/
 |-- reports/
+|-- athena-results/
+|-- crawler_demo/
 `-- logs/
 ```
 
@@ -147,6 +153,12 @@ s3://<bucket-name>/
 - `scripts/run_processing_job.ps1`
 - `scripts/download_reports.sh`
 - `scripts/download_reports.ps1`
+- `scripts/run_glue_crawler.sh`
+- `scripts/run_glue_crawler.ps1`
+- `scripts/run_glue_data_quality.sh`
+- `scripts/run_glue_data_quality.ps1`
+- `scripts/run_glue_column_statistics.sh`
+- `scripts/run_glue_column_statistics.ps1`
 
 ## Documentacion Esperada
 
@@ -162,6 +174,7 @@ s3://<bucket-name>/
 - `lab/07_training_serving_consistency.md`
 - `lab/08_governance_lineage.md`
 - `lab/09_cost_security_cleanup.md`
+- `lab/10_athena_glue_native_features.md`
 
 ## Criterios De Aceptacion
 
@@ -181,3 +194,7 @@ s3://<bucket-name>/
 - No hay credenciales reales en el repositorio.
 - No se crean archivos fuera de `2_ML-Data-Processing-Prep/`.
 - La documentacion explica la relacion con AWS Glue, SageMaker Processing, SageMaker Data Wrangler, SageMaker Feature Store, Amazon S3, IAM, KMS, CloudWatch y lineage.
+- Existe una guia paso a paso para ejecutar consultas basicas en Athena desde la consola AWS.
+- Existe un Glue Crawler opcional para mostrar descubrimiento automatico de esquemas.
+- Existe una ejecucion opcional de Glue Data Quality con reglas basicas.
+- Existe una ejecucion opcional de Glue Data Catalog Column Statistics para una tabla de features.

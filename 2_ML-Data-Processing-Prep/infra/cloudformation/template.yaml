@@ -137,6 +137,14 @@ Resources:
                       - reports/*
                       - logs/*
                       - scripts/*
+                      - crawler_demo/*
+                      - athena-results/*
+              - Sid: ValidateLabBucketForColumnStatistics
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt LabBucket.Arn
               - Sid: ReadLabInputsAndCode
                 Effect: Allow
                 Action:
@@ -144,6 +152,17 @@ Resources:
                 Resource:
                   - !Sub ${LabBucket.Arn}/raw/*
                   - !Sub ${LabBucket.Arn}/scripts/*
+                  - !Sub ${LabBucket.Arn}/crawler_demo/*
+                  - !Sub ${LabBucket.Arn}/cleaned/*
+                  - !Sub ${LabBucket.Arn}/curated/*
+                  - !Sub ${LabBucket.Arn}/features/*
+                  - !Sub ${LabBucket.Arn}/inference/*
+              - Sid: ReadGlueDataQualityAssets
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::aws-glue-ml-data-quality-assets-${AWS::Region}/*
               - Sid: WriteLabOutputs
                 Effect: Allow
                 Action:
@@ -159,6 +178,8 @@ Resources:
                   - !Sub ${LabBucket.Arn}/lineage/*
                   - !Sub ${LabBucket.Arn}/reports/*
                   - !Sub ${LabBucket.Arn}/logs/*
+                  - !Sub ${LabBucket.Arn}/crawler_demo/*
+                  - !Sub ${LabBucket.Arn}/athena-results/*
               - Sid: GlueCatalogAccess
                 Effect: Allow
                 Action:
@@ -171,12 +192,27 @@ Resources:
                   - glue:BatchCreatePartition
                   - glue:BatchDeletePartition
                   - glue:BatchGetPartition
+                  - glue:CreatePartition
+                  - glue:UpdatePartition
+                  - glue:DeletePartition
                   - glue:GetPartition
                   - glue:GetPartitions
+                  - glue:GetTableVersions
+                  - glue:GetColumnStatisticsForTable
+                  - glue:UpdateColumnStatisticsForTable
                 Resource:
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GlueDatabaseName}
                   - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabaseName}/*
+              - Sid: GlueDataQualityAccess
+                Effect: Allow
+                Action:
+                  - glue:GetDataQualityRuleset
+                  - glue:GetDataQualityRulesetEvaluationRun
+                  - glue:GetDataQualityResult
+                  - glue:PublishDataQuality
+                Resource:
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:dataQualityRuleset/*
               - Sid: CloudWatchLogsAccess
                 Effect: Allow
                 Action:
@@ -201,6 +237,33 @@ Resources:
           Value: Training
         - Key: AutoDelete
           Value: "true"
+
+  GlueRawCrawler:
+    Type: AWS::Glue::Crawler
+    DependsOn: GlueDatabase
+    Properties:
+      Name: !Sub ${ResourcePrefix}-raw-crawler
+      Description: Optional crawler demo for raw synthetic data copied into crawler_demo/.
+      Role: !If [HasExistingGlueRoleArn, !Ref ExistingGlueRoleArn, !GetAtt GlueProcessingRole.Arn]
+      DatabaseName: !Ref GlueDatabaseName
+      TablePrefix: crawler_
+      Targets:
+        S3Targets:
+          - Path: !Sub s3://${LabBucket}/crawler_demo/customers/
+          - Path: !Sub s3://${LabBucket}/crawler_demo/transactions/
+          - Path: !Sub s3://${LabBucket}/crawler_demo/inference_transactions/
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_EVERYTHING
+      Tags:
+        Project: MLDataProcessingPrep
+        Environment: Lab
+        Owner: Student
+        ManagedBy: IaC
+        CostCenter: Training
+        AutoDelete: "true"
 
   GlueProcessingJob:
     Type: AWS::Glue::Job
@@ -248,6 +311,9 @@ Outputs:
   GlueJobName:
     Description: Glue Python Shell job name.
     Value: !Ref GlueProcessingJob
+  GlueCrawlerName:
+    Description: Optional Glue crawler demo name.
+    Value: !Ref GlueRawCrawler
   ProcessingRoleArn:
     Description: IAM role used by the Glue processing job.
     Value: !If [HasExistingGlueRoleArn, !Ref ExistingGlueRoleArn, !GetAtt GlueProcessingRole.Arn]

@@ -58,6 +58,12 @@ python -m src.destroy_infra --retain-glue-role
 
 Ese comando elimina el resto de recursos y retiene `GlueProcessingRole` para revision por un administrador.
 
+Si el cleanup muestra `NoSuchBucket`, significa que el stack aun referencia un bucket que ya no existe o que no termino de crearse. La version actual de `src.destroy_infra` ignora ese caso durante el vaciado y continua con la eliminacion del stack:
+
+```bash
+python -m src.destroy_infra
+```
+
 ## Checklist Al Final Del Laboratorio
 
 Ejecuta:

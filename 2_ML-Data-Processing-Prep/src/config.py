@@ -49,6 +49,9 @@ class Settings:
     glue_database_name: str
     stack_name: str
     glue_job_name: str
+    glue_crawler_name: str
+    glue_data_quality_ruleset_name: str
+    glue_data_quality_workers: int
     log_group_name: str
     glue_role_arn: str
     empty_bucket_on_destroy: bool
@@ -69,6 +72,10 @@ def get_settings(load_env: bool = True) -> Settings:
         glue_database_name=os.getenv("GLUE_DATABASE_NAME", "ml_data_prep_lab"),
         stack_name=os.getenv("STACK_NAME", f"{resource_prefix}-stack"),
         glue_job_name=os.getenv("GLUE_JOB_NAME", f"{resource_prefix}-processing-job"),
+        glue_crawler_name=os.getenv("GLUE_CRAWLER_NAME") or f"{resource_prefix}-raw-crawler",
+        glue_data_quality_ruleset_name=os.getenv("GLUE_DATA_QUALITY_RULESET_NAME")
+        or f"{resource_prefix}-features-training-quality",
+        glue_data_quality_workers=int(os.getenv("GLUE_DATA_QUALITY_WORKERS", "2")),
         log_group_name=os.getenv("LOG_GROUP_NAME", f"/aws/{resource_prefix}/processing"),
         glue_role_arn=os.getenv("GLUE_ROLE_ARN", ""),
         empty_bucket_on_destroy=os.getenv("EMPTY_S3_ON_DESTROY", "true").lower() == "true",

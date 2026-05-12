@@ -18,7 +18,7 @@ from src.feature_engineering import (
     build_inference_features,
     build_training_features,
 )
-from src.glue_catalog import register_all_tables
+from src.glue_catalog import catalog_object_key, register_all_tables
 from src.lineage_report import build_lineage, lineage_to_markdown
 from src.s3_io import read_csv_from_s3, write_csv_to_s3, write_json_to_s3, write_text_to_s3
 from src.transform_data import build_curated_dataset
@@ -35,6 +35,26 @@ ALL_STEPS = [
     "lineage",
     "dataset-card",
 ]
+
+
+def _write_csv_output(
+    s3_client: Any,
+    df: pd.DataFrame,
+    bucket_name: str,
+    key: str,
+    table_name: str | None = None,
+) -> None:
+    write_csv_to_s3(s3_client, df, bucket_name, key)
+    if not table_name:
+        return
+    target_key = catalog_object_key(table_name)
+    if target_key == key:
+        return
+    s3_client.copy_object(
+        Bucket=bucket_name,
+        CopySource={"Bucket": bucket_name, "Key": key},
+        Key=target_key,
+    )
 
 
 def normalize_steps(steps: str | Iterable[str]) -> list[str]:
@@ -139,15 +159,33 @@ def run_pipeline(
         print("Wrote quality/quality_report.json")
 
     if "process" in selected_steps:
-        write_csv_to_s3(s3_client, prepared["cleaned_customers"], bucket_name, "cleaned/customers.csv")
-        write_csv_to_s3(s3_client, prepared["cleaned_transactions"], bucket_name, "cleaned/transactions.csv")
+        _write_csv_output(
+            s3_client,
+            prepared["cleaned_customers"],
+            bucket_name,
+            "cleaned/customers.csv",
+            "cleaned_customers",
+        )
+        _write_csv_output(
+            s3_client,
+            prepared["cleaned_transactions"],
+            bucket_name,
+            "cleaned/transactions.csv",
+            "cleaned_transactions",
+        )
         write_csv_to_s3(
             s3_client,
             prepared["cleaned_inference_transactions"],
             bucket_name,
             "cleaned/inference_transactions.csv",
         )
-        write_csv_to_s3(s3_client, prepared["curated_training"], bucket_name, "curated/customer_transactions.csv")
+        _write_csv_output(
+            s3_client,
+            prepared["curated_training"],
+            bucket_name,
+            "curated/customer_transactions.csv",
+            "curated_customer_transactions",
+        )
         write_csv_to_s3(
             s3_client,
             prepared["curated_inference"],
@@ -162,11 +200,23 @@ def run_pipeline(
         print("Wrote features/training_features.csv and features/inference_features.csv")
 
     if "training-dataset" in selected_steps:
-        write_csv_to_s3(s3_client, prepared["training_dataset"], bucket_name, "features/training_dataset.csv")
+        _write_csv_output(
+            s3_client,
+            prepared["training_dataset"],
+            bucket_name,
+            "features/training_dataset.csv",
+            "features_training",
+        )
         print("Wrote features/training_dataset.csv")
 
     if "inference-dataset" in selected_steps:
-        write_csv_to_s3(s3_client, prepared["inference_dataset"], bucket_name, "inference/inference_dataset.csv")
+        _write_csv_output(
+            s3_client,
+            prepared["inference_dataset"],
+            bucket_name,
+            "inference/inference_dataset.csv",
+            "features_inference",
+        )
         print("Wrote inference/inference_dataset.csv")
 
     lineage = build_lineage(bucket_name, database_name, resource_prefix)
@@ -203,4 +253,3 @@ def run_pipeline(
     write_json_to_s3(s3_client, outputs, bucket_name, "logs/pipeline_run.json")
     print("Pipeline finished successfully")
     return outputs
-

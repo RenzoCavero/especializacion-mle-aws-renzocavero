@@ -15,8 +15,11 @@ El laboratorio implementa una arquitectura cloud-first para preparar datos de Ma
 | `features/` | S3 features zone / SageMaker Feature Store offline store |
 | `inference/` | S3 inference dataset |
 | Catalogo de datos | AWS Glue Data Catalog |
+| Descubrimiento automatico de esquemas | AWS Glue Crawler |
 | Profiling de datos | SageMaker Processing / AWS Glue |
 | Validaciones de calidad | AWS Glue Data Quality / scripts en SageMaker Processing |
+| Estadisticas de columnas | AWS Glue Data Catalog Column Statistics |
+| Consulta SQL exploratoria | Amazon Athena |
 | Limpieza y transformacion | AWS Glue Job / SageMaker Processing |
 | Feature engineering | SageMaker Processing / Feature Store |
 | Reportes y artefactos | Amazon S3 |
@@ -37,8 +40,25 @@ El laboratorio implementa una arquitectura cloud-first para preparar datos de Ma
 6. Se ejecuta procesamiento con Glue Job o SageMaker Processing.
 7. Se escriben salidas en `cleaned/`, `curated/`, `features/` e `inference/`.
 8. Se generan reportes en `profiles/`, `quality/`, `lineage/` y `reports/`.
-9. Se revisan logs en CloudWatch.
-10. Se ejecuta cleanup para eliminar recursos creados.
+9. Opcionalmente se ejecutan Glue Crawler, Glue Data Quality, Column Statistics y consultas Athena para conectar el pipeline con capacidades administradas de AWS.
+10. Se revisan logs en CloudWatch.
+11. Se ejecuta cleanup para eliminar recursos creados.
+
+## Secuencia Pedagogica Recomendada
+
+Para explicar el laboratorio a estudiantes, presentar primero esta secuencia conceptual:
+
+```text
+S3 raw data
+-> Glue Crawler o registro explicito
+-> Glue Data Catalog
+-> Data Quality gate
+-> Glue ETL Job
+-> S3 cleaned / curated / features
+-> Athena, SageMaker Training, Batch Inference o Feature Store
+```
+
+En la implementacion actual, el registro explicito de tablas es el camino principal y el crawler es demo opcional. La calidad aparece en dos niveles: reglas Python dentro del Glue Job antes de publicar datasets finales y Glue Data Quality administrado sobre `features_training` despues de crear features. En una version productiva, Glue Data Quality tambien puede ejecutarse sobre raw o cleaned antes de iniciar transformaciones costosas.
 
 ## Componentes
 
@@ -50,6 +70,22 @@ S3 es el data lake central. Debe contener zonas separadas para entradas, transfo
 
 Glue Data Catalog debe registrar bases de datos y tablas asociadas a las capas del data lake. El catalogo permite que los datos sean descubribles por Glue, Athena, SageMaker y herramientas posteriores.
 
+### AWS Glue Crawler
+
+El crawler es una extension opcional para demostrar descubrimiento automatico de esquemas. El pipeline principal usa tablas definidas por codigo porque conoce el contrato de datos; el crawler se ejecuta bajo demanda sobre `crawler_demo/` para que el estudiante compare ambos enfoques.
+
+### Glue Data Quality
+
+Glue Data Quality complementa las validaciones Python del pipeline con reglas DQDL administradas por AWS. En este laboratorio se usa como demo opcional sobre `features_training`, despues de generar el dataset de entrenamiento.
+
+### Glue Data Catalog Column Statistics
+
+Column Statistics permite guardar estadisticas administradas en el catalogo para columnas seleccionadas. Sirve para exploracion y optimizacion de consultas, pero no reemplaza el profiling ML escrito en `profiles/profile.json`.
+
+### Amazon Athena
+
+Athena permite consultar las tablas del Glue Data Catalog con SQL desde la consola AWS. El laboratorio documenta consultas basicas sobre `features_training` y `curated_customer_transactions`, usando `s3://<bucket>/athena-results/` como ubicacion de resultados.
+
 ### Glue Job O SageMaker Processing
 
 El procesamiento puede implementarse con Glue Jobs o SageMaker Processing Jobs:
@@ -57,7 +93,13 @@ El procesamiento puede implementarse con Glue Jobs o SageMaker Processing Jobs:
 - Glue Job es natural para ETL distribuido, Spark y catalogacion integrada.
 - SageMaker Processing es natural para ejecutar codigo Python de preparacion ML con entradas y salidas S3.
 
-Para estudiantes, se recomienda comenzar con SageMaker Processing si el pipeline usa pandas y datasets pequenos. Glue queda como catalogo obligatorio y como extension ETL.
+La implementacion actual usa AWS Glue Python Shell Job para mantener el procesamiento dentro de AWS con costo bajo y sin endpoints persistentes. SageMaker Processing sigue siendo una alternativa valida para laboratorios futuros enfocados en SageMaker.
+
+### Orquestacion Y Multiples Jobs
+
+El laboratorio usa un job modular. Una version productiva puede separar `raw -> cleaned`, `cleaned -> curated` y `curated -> features`, y orquestar esos jobs con Glue Workflows, Glue Triggers, Step Functions o SageMaker Pipelines.
+
+Separar jobs es recomendable cuando existen contratos independientes, volumen alto, permisos distintos, reintentos por etapa, diferentes SLAs o gates de calidad entre capas. Mantener un solo job es preferible para laboratorios pequenos, prototipos o pipelines donde la orquestacion extra no aporta valor todavia.
 
 ### CloudWatch Logs
 
@@ -94,5 +136,6 @@ SageMaker Feature Store puede ser opcional para controlar costos. La capa `featu
 - EventBridge para disparar procesamiento al llegar datos.
 - Athena para consultas de validacion.
 - Glue Data Quality para reglas declarativas.
+- Glue Data Catalog Column Statistics para optimizar consultas catalogadas.
 - SageMaker Feature Store online para inferencia real-time, solo si se controla costo.
 - CloudTrail y Lake Formation para auditoria y gobernanza avanzada.

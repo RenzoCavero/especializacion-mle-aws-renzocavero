@@ -31,6 +31,29 @@ s3://<bucket>/profiles/profile.json
 s3://<bucket>/quality/quality_report.json
 ```
 
+## Extension Opcional Con Glue Data Quality
+
+El pipeline principal usa reglas Python para que la logica sea visible, versionable y facil de probar. Como extension administrada de AWS, el laboratorio tambien incluye Glue Data Quality sobre la tabla `features_training`.
+
+Ejecutar:
+
+```bash
+make glue-data-quality
+```
+
+Outputs esperados:
+
+```text
+s3://<bucket>/quality/aws_glue_data_quality/
+s3://<bucket>/quality/glue_data_quality_result.json
+```
+
+La guia completa esta en:
+
+```text
+lab/10_athena_glue_native_features.md
+```
+
 ## Diferencia Entre Profiling Y Calidad
 
 Profiling describe el dataset. Responde preguntas como:

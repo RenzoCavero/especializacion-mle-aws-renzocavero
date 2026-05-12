@@ -1,10 +1,10 @@
 PYTHON ?= python
 
-.PHONY: help deploy-infra data upload-raw catalog profile quality process features training-dataset inference-dataset lineage dataset-card download-reports validate destroy-infra all-cloud test
+.PHONY: help deploy-infra data upload-raw catalog profile quality process features training-dataset inference-dataset lineage dataset-card glue-crawler glue-data-quality column-stats aws-native-extras download-reports validate destroy-infra all-cloud test
 
 help:
 	@echo "AWS ML data preparation lab"
-	@echo "Targets: deploy-infra data upload-raw catalog profile quality process features training-dataset inference-dataset lineage dataset-card download-reports validate destroy-infra all-cloud test"
+	@echo "Targets: deploy-infra data upload-raw catalog profile quality process features training-dataset inference-dataset lineage dataset-card glue-crawler glue-data-quality column-stats aws-native-extras download-reports validate destroy-infra all-cloud test"
 
 deploy-infra:
 	$(PYTHON) -m src.deploy_infra
@@ -42,6 +42,20 @@ lineage:
 dataset-card:
 	$(PYTHON) -m src.run_processing_job --steps dataset-card
 
+glue-crawler:
+	$(PYTHON) -m src.run_glue_crawler
+
+glue-data-quality:
+	$(PYTHON) -m src.run_glue_data_quality
+
+column-stats:
+	$(PYTHON) -m src.run_glue_column_statistics
+
+aws-native-extras:
+	$(PYTHON) -m src.run_glue_crawler
+	$(PYTHON) -m src.run_glue_data_quality
+	$(PYTHON) -m src.run_glue_column_statistics
+
 download-reports:
 	$(PYTHON) -m src.download_reports
 
@@ -62,4 +76,3 @@ all-cloud:
 
 test:
 	pytest -q
-
