@@ -1,0 +1,322 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cloud-first data processing and preparation lab for AWS Machine Learning.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ml-data-processing-prep
+  Environment:
+    Type: String
+    Default: lab
+  ResourcePrefix:
+    Type: String
+    Default: ml-data-prep-lab
+  BucketName:
+    Type: String
+    Default: ""
+    Description: Optional globally unique bucket name. Leave empty to let CloudFormation generate one.
+  GlueDatabaseName:
+    Type: String
+    Default: ml_data_prep_lab
+  ExistingGlueRoleArn:
+    Type: String
+    Default: ""
+    Description: Optional pre-created Glue execution role ARN. Use this in restricted accounts without IAM role creation permissions.
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30]
+  GluePythonShellMaxCapacity:
+    Type: Number
+    Default: 0.0625
+    AllowedValues: [0.0625, 1]
+
+Conditions:
+  HasBucketName: !Not [!Equals [!Ref BucketName, ""]]
+  HasExistingGlueRoleArn: !Not [!Equals [!Ref ExistingGlueRoleArn, ""]]
+  CreateGlueProcessingRole: !Equals [!Ref ExistingGlueRoleArn, ""]
+
+Resources:
+  LabBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !If [HasBucketName, !Ref BucketName, !Ref AWS::NoValue]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireTemporaryLogs
+            Status: Enabled
+            Prefix: logs/
+            ExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: MLDataProcessingPrep
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: Student
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  ProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/${ResourcePrefix}/processing
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Project
+          Value: MLDataProcessingPrep
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: Student
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref GlueDatabaseName
+        Description: Data Catalog database for the ML data preparation lab.
+
+  GlueProcessingRole:
+    Type: AWS::IAM::Role
+    Condition: CreateGlueProcessingRole
+    Properties:
+      RoleName: !Sub ${ResourcePrefix}-glue-processing-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${ResourcePrefix}-s3-glue-logs-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListLabBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt LabBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - ""
+                      - raw/*
+                      - cleaned/*
+                      - curated/*
+                      - features/*
+                      - inference/*
+                      - profiles/*
+                      - quality/*
+                      - lineage/*
+                      - reports/*
+                      - logs/*
+                      - scripts/*
+                      - crawler_demo/*
+                      - athena-results/*
+              - Sid: ValidateLabBucketForColumnStatistics
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt LabBucket.Arn
+              - Sid: ReadLabInputsAndCode
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub ${LabBucket.Arn}/raw/*
+                  - !Sub ${LabBucket.Arn}/scripts/*
+                  - !Sub ${LabBucket.Arn}/crawler_demo/*
+                  - !Sub ${LabBucket.Arn}/cleaned/*
+                  - !Sub ${LabBucket.Arn}/curated/*
+                  - !Sub ${LabBucket.Arn}/features/*
+                  - !Sub ${LabBucket.Arn}/inference/*
+              - Sid: ReadGlueDataQualityAssets
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::aws-glue-ml-data-quality-assets-${AWS::Region}/*
+              - Sid: WriteLabOutputs
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub ${LabBucket.Arn}/cleaned/*
+                  - !Sub ${LabBucket.Arn}/curated/*
+                  - !Sub ${LabBucket.Arn}/features/*
+                  - !Sub ${LabBucket.Arn}/inference/*
+                  - !Sub ${LabBucket.Arn}/profiles/*
+                  - !Sub ${LabBucket.Arn}/quality/*
+                  - !Sub ${LabBucket.Arn}/lineage/*
+                  - !Sub ${LabBucket.Arn}/reports/*
+                  - !Sub ${LabBucket.Arn}/logs/*
+                  - !Sub ${LabBucket.Arn}/crawler_demo/*
+                  - !Sub ${LabBucket.Arn}/athena-results/*
+              - Sid: GlueCatalogAccess
+                Effect: Allow
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:CreateTable
+                  - glue:UpdateTable
+                  - glue:BatchCreatePartition
+                  - glue:BatchDeletePartition
+                  - glue:BatchGetPartition
+                  - glue:CreatePartition
+                  - glue:UpdatePartition
+                  - glue:DeletePartition
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:GetTableVersions
+                  - glue:GetColumnStatisticsForTable
+                  - glue:UpdateColumnStatisticsForTable
+                Resource:
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GlueDatabaseName}
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabaseName}/*
+              - Sid: GlueDataQualityAccess
+                Effect: Allow
+                Action:
+                  - glue:GetDataQualityRuleset
+                  - glue:GetDataQualityRulesetEvaluationRun
+                  - glue:GetDataQualityResult
+                  - glue:PublishDataQuality
+                Resource:
+                  - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:dataQualityRuleset/*
+              - Sid: CloudWatchLogsAccess
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource:
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ResourcePrefix}/processing*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws-glue/*
+      Tags:
+        - Key: Project
+          Value: MLDataProcessingPrep
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: Student
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  GlueRawCrawler:
+    Type: AWS::Glue::Crawler
+    DependsOn: GlueDatabase
+    Properties:
+      Name: !Sub ${ResourcePrefix}-raw-crawler
+      Description: Optional crawler demo for raw synthetic data copied into crawler_demo/.
+      Role: !If [HasExistingGlueRoleArn, !Ref ExistingGlueRoleArn, !GetAtt GlueProcessingRole.Arn]
+      DatabaseName: !Ref GlueDatabaseName
+      TablePrefix: crawler_
+      Targets:
+        S3Targets:
+          - Path: !Sub s3://${LabBucket}/crawler_demo/customers/
+          - Path: !Sub s3://${LabBucket}/crawler_demo/transactions/
+          - Path: !Sub s3://${LabBucket}/crawler_demo/inference_transactions/
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_EVERYTHING
+      Tags:
+        Project: MLDataProcessingPrep
+        Environment: Lab
+        Owner: Student
+        ManagedBy: IaC
+        CostCenter: Training
+        AutoDelete: "true"
+
+  GlueProcessingJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: !Sub ${ResourcePrefix}-processing-job
+      Description: Runs profiling, quality, cleaning, curation and feature engineering for the ML data prep lab.
+      Role: !If [HasExistingGlueRoleArn, !Ref ExistingGlueRoleArn, !GetAtt GlueProcessingRole.Arn]
+      GlueVersion: "3.0"
+      Command:
+        Name: pythonshell
+        PythonVersion: "3.9"
+        ScriptLocation: !Sub s3://${LabBucket}/scripts/glue_pipeline.py
+      DefaultArguments:
+        "--bucket-name": !Ref LabBucket
+        "--database-name": !Ref GlueDatabaseName
+        "--resource-prefix": !Ref ResourcePrefix
+        "--pipeline-steps": all
+        "--extra-py-files": !Sub s3://${LabBucket}/scripts/ml_data_prep_src.zip
+        "--library-set": analytics
+        "--TempDir": !Sub s3://${LabBucket}/logs/glue-temp/
+        "--enable-metrics": "true"
+        "--enable-continuous-cloudwatch-log": "true"
+        "--continuous-log-logGroup": !Ref ProcessingLogGroup
+        "--continuous-log-logStreamPrefix": !Ref ResourcePrefix
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      MaxCapacity: !Ref GluePythonShellMaxCapacity
+      MaxRetries: 0
+      Timeout: 30
+      Tags:
+        Project: MLDataProcessingPrep
+        Environment: Lab
+        Owner: Student
+        ManagedBy: IaC
+        CostCenter: Training
+        AutoDelete: "true"
+
+Outputs:
+  BucketName:
+    Description: S3 data lake bucket.
+    Value: !Ref LabBucket
+  GlueDatabaseName:
+    Description: Glue Data Catalog database.
+    Value: !Ref GlueDatabaseName
+  GlueJobName:
+    Description: Glue Python Shell job name.
+    Value: !Ref GlueProcessingJob
+  GlueCrawlerName:
+    Description: Optional Glue crawler demo name.
+    Value: !Ref GlueRawCrawler
+  ProcessingRoleArn:
+    Description: IAM role used by the Glue processing job.
+    Value: !If [HasExistingGlueRoleArn, !Ref ExistingGlueRoleArn, !GetAtt GlueProcessingRole.Arn]
+  LogGroupName:
+    Description: CloudWatch log group for lab processing logs.
+    Value: !Ref ProcessingLogGroup
