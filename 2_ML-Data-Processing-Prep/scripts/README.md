@@ -376,7 +376,7 @@ s3://<bucket>/logs/pipeline_run.json
 Configura `.env`:
 
 ```text
-AWS_PROFILE=ml-data-prep-lab
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=us-east-1
 PROJECT_NAME=ml-data-processing-prep
 ENVIRONMENT=lab
@@ -396,7 +396,7 @@ pip install -r requirements.txt
 Valida AWS:
 
 ```bash
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 ## Despues De Ejecutar
@@ -404,19 +404,19 @@ aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
 Revisar outputs en S3:
 
 ```bash
-aws s3 ls s3://<bucket-name>/ --recursive --profile ml-data-prep-lab --region us-east-1
+aws s3 ls s3://<bucket-name>/ --recursive --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Revisar ejecuciones Glue:
 
 ```bash
-aws glue get-job-runs --job-name ml-data-prep-lab-processing-job --profile ml-data-prep-lab --region us-east-1
+aws glue get-job-runs --job-name ml-data-prep-lab-processing-job --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Revisar logs CloudWatch:
 
 ```bash
-aws logs describe-log-groups --log-group-name-prefix /aws --profile ml-data-prep-lab --region us-east-1
+aws logs describe-log-groups --log-group-name-prefix /aws --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Destruir recursos:

@@ -47,7 +47,7 @@ Centralizar configuracion en `src/config.py`.
 Variables esperadas:
 
 ```text
-AWS_PROFILE=
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=
 PROJECT_NAME=ml-data-processing-prep
 ENVIRONMENT=lab

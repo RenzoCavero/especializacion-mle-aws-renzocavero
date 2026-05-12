@@ -33,7 +33,7 @@ python -m src.deploy_infra
 Los parametros se leen desde `.env`:
 
 ```text
-AWS_PROFILE=
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=
 PROJECT_NAME=ml-data-processing-prep
 ENVIRONMENT=lab
@@ -94,16 +94,16 @@ Esto elimina el stack reteniendo `GlueProcessingRole`. El rol queda huerfano y d
 Si el caller es un rol asumido de IAM Identity Center, por ejemplo:
 
 ```text
-AWSReservedSSO_PowerUserAccess_<id>
+AWSReservedSSO_MLOpsLab2Permission_<id>
 ```
 
-los permisos IAM faltantes deben agregarse al permission set o rol que usa el deployer. Agregar la politica al rol `ml-data-prep-lab-glue-processing-role` no ayuda, porque ese es el recurso administrado por CloudFormation.
+los permisos IAM faltantes deben agregarse al Permission Set `MLOpsLab2Permission` o al rol que usa el deployer. Agregar la politica al rol `ml-data-prep-lab-glue-processing-role` no ayuda, porque ese es el recurso administrado por CloudFormation.
 
 Despues de actualizar permisos SSO:
 
 ```bash
 aws sso logout
-aws sso login --profile ml-data-prep-lab
+aws sso login --profile mlops-2-data-prep-lab
 ```
 
 Luego reintenta deploy o cleanup.

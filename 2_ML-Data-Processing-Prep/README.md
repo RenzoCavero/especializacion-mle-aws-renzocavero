@@ -65,9 +65,9 @@ data/sample/*.csv
    Configura e inicia sesion:
 
    ```bash
-   aws configure sso --profile ml-data-prep-lab
-   aws sso login --profile ml-data-prep-lab
-   aws sts get-caller-identity --profile ml-data-prep-lab
+   aws configure sso --profile mlops-2-data-prep-lab
+   aws sso login --profile mlops-2-data-prep-lab
+   aws sts get-caller-identity --profile mlops-2-data-prep-lab
    ```
 
    Alternativa con rol IAM: configura un profile con `role_arn` y `source_profile` en `~/.aws/config`. La CLI asumira el rol y administrara credenciales temporales.
@@ -86,7 +86,7 @@ data/sample/*.csv
 
 4. Solicita permisos AWS para desplegar el laboratorio.
 
-   El usuario, permission set o rol que ejecuta `make all-cloud` necesita crear y destruir recursos de:
+   El usuario, el Permission Set `MLOpsLab2Permission` o el rol que ejecuta `make all-cloud` necesita crear y destruir recursos de:
 
    ```text
    CloudFormation
@@ -99,10 +99,10 @@ data/sample/*.csv
    Validaciones rapidas:
 
    ```bash
-   aws cloudformation list-stacks --profile ml-data-prep-lab --region us-east-1
-   aws s3 ls --profile ml-data-prep-lab --region us-east-1
-   aws glue get-databases --profile ml-data-prep-lab --region us-east-1
-   aws logs describe-log-groups --profile ml-data-prep-lab --region us-east-1
+   aws cloudformation list-stacks --profile mlops-2-data-prep-lab --region us-east-1
+   aws s3 ls --profile mlops-2-data-prep-lab --region us-east-1
+   aws glue get-databases --profile mlops-2-data-prep-lab --region us-east-1
+   aws logs describe-log-groups --profile mlops-2-data-prep-lab --region us-east-1
    ```
 
    Si aparece `AccessDenied`, falta permiso. Revisa el detalle completo en `lab/01_aws_setup.md`.
@@ -116,7 +116,7 @@ cp .env.example .env
 Edita `.env`:
 
 ```text
-AWS_PROFILE=<tu-profile>
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=us-east-1
 S3_BUCKET_NAME=
 RESOURCE_PREFIX=ml-data-prep-lab
@@ -276,7 +276,7 @@ Si `deploy_infra.sh` falla con `DELETE_FAILED`, `CREATE_FAILED` o `ROLLBACK_COMP
 ```bash
 aws cloudformation describe-stack-events \
   --stack-name ml-data-prep-lab-stack \
-  --profile ml-data-prep-lab \
+  --profile mlops-2-data-prep-lab \
   --region us-east-1 \
   --query "StackEvents[0:10].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]" \
   --output table
@@ -329,7 +329,7 @@ not authorized to perform: iam:GetRole
 not authorized to perform: iam:DeleteRolePolicy
 ```
 
-tu profile no tiene permisos para que CloudFormation cree o elimine el rol IAM del Glue Job. Esto suele ocurrir con permission sets tipo `PowerUserAccess`, porque muchos entornos bloquean acciones IAM.
+tu profile no tiene permisos para que CloudFormation cree o elimine el rol IAM del Glue Job. En este laboratorio, revisa el Permission Set `MLOpsLab2Permission`, porque muchos entornos bloquean acciones IAM.
 
 Tienes dos opciones:
 
@@ -365,17 +365,17 @@ Esto deja el rol `ml-data-prep-lab-glue-processing-role` como recurso huerfano. 
 Si usas un profile SSO y ves un caller como:
 
 ```text
-arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_PowerUserAccess_<id>/<user>
+arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_MLOpsLab2Permission_<id>/<user>
 ```
 
-los permisos faltantes deben agregarse al permission set o rol que genera `AWSReservedSSO_PowerUserAccess_<id>`. No sirve agregarlos al rol `ml-data-prep-lab-glue-processing-role`, porque ese rol es el recurso que CloudFormation intenta crear o eliminar.
+los permisos faltantes deben agregarse al Permission Set `MLOpsLab2Permission` o al rol que genera `AWSReservedSSO_MLOpsLab2Permission_<id>`. No sirve agregarlos al rol `ml-data-prep-lab-glue-processing-role`, porque ese rol es el recurso que CloudFormation intenta crear o eliminar.
 
-Despues de que el administrador actualice el permission set, refresca la sesion local:
+Despues de que el administrador actualice `MLOpsLab2Permission`, refresca la sesion local:
 
 ```bash
 aws sso logout
-aws sso login --profile ml-data-prep-lab
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sso login --profile mlops-2-data-prep-lab
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Luego reintenta:

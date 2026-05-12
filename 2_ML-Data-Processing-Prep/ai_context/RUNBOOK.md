@@ -43,9 +43,9 @@ Region del laboratorio
 Configurar:
 
 ```bash
-aws configure sso --profile ml-data-prep-lab
-aws sso login --profile ml-data-prep-lab
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws configure sso --profile mlops-2-data-prep-lab
+aws sso login --profile mlops-2-data-prep-lab
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 ### Profile Con Rol IAM
@@ -55,7 +55,7 @@ Si se usa rol, pedir `role_arn`, `source_profile`, permiso `sts:AssumeRole` y tr
 Ejemplo en `~/.aws/config`:
 
 ```text
-[profile ml-data-prep-lab]
+[profile mlops-2-data-prep-lab]
 role_arn = arn:aws:iam::<account-id>:role/<role-name>
 source_profile = base-profile
 region = us-east-1
@@ -92,10 +92,10 @@ CloudFormation usa `CAPABILITY_NAMED_IAM`, por lo que el deployer necesita permi
 Validar permisos basicos:
 
 ```bash
-aws cloudformation list-stacks --profile ml-data-prep-lab --region us-east-1
-aws s3 ls --profile ml-data-prep-lab --region us-east-1
-aws glue get-databases --profile ml-data-prep-lab --region us-east-1
-aws logs describe-log-groups --profile ml-data-prep-lab --region us-east-1
+aws cloudformation list-stacks --profile mlops-2-data-prep-lab --region us-east-1
+aws s3 ls --profile mlops-2-data-prep-lab --region us-east-1
+aws glue get-databases --profile mlops-2-data-prep-lab --region us-east-1
+aws logs describe-log-groups --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 ## Configuracion
@@ -109,7 +109,7 @@ cp .env.example .env
 Variables esperadas:
 
 ```text
-AWS_PROFILE=
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=
 PROJECT_NAME=ml-data-processing-prep
 ENVIRONMENT=lab
@@ -357,7 +357,7 @@ Accion 1: revisar eventos para encontrar la causa real:
 ```bash
 aws cloudformation describe-stack-events \
   --stack-name ml-data-prep-lab-stack \
-  --profile ml-data-prep-lab \
+  --profile mlops-2-data-prep-lab \
   --region us-east-1 \
   --query "StackEvents[0:10].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]" \
   --output table
@@ -415,17 +415,17 @@ Esto retiene `GlueProcessingRole` y permite eliminar el resto del stack. El rol 
 Si el usuario ejecuta con IAM Identity Center / SSO, el caller suele verse asi:
 
 ```text
-arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_PowerUserAccess_<id>/<user>
+arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_MLOpsLab2Permission_<id>/<user>
 ```
 
-Los permisos faltantes deben agregarse al permission set o rol SSO del deployer. No agregarlos al rol `ml-data-prep-lab-glue-processing-role`, porque ese rol es el recurso que CloudFormation intenta administrar.
+Los permisos faltantes deben agregarse al Permission Set `MLOpsLab2Permission` o al rol SSO del deployer. No agregarlos al rol `ml-data-prep-lab-glue-processing-role`, porque ese rol es el recurso que CloudFormation intenta administrar.
 
-Despues de actualizar el permission set:
+Despues de actualizar `MLOpsLab2Permission`:
 
 ```bash
 aws sso logout
-aws sso login --profile ml-data-prep-lab
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sso login --profile mlops-2-data-prep-lab
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Luego reintentar:

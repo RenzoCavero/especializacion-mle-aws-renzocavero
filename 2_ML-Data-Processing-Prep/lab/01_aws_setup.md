@@ -47,25 +47,25 @@ Region del laboratorio, por ejemplo us-east-1
 Configura el profile:
 
 ```bash
-aws configure sso --profile ml-data-prep-lab
+aws configure sso --profile mlops-2-data-prep-lab
 ```
 
 Inicia sesion:
 
 ```bash
-aws sso login --profile ml-data-prep-lab
+aws sso login --profile mlops-2-data-prep-lab
 ```
 
 Valida identidad:
 
 ```bash
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Si funciona, copia el profile y region a `.env`:
 
 ```text
-AWS_PROFILE=ml-data-prep-lab
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=us-east-1
 RESOURCE_PREFIX=ml-data-prep-lab
 S3_BUCKET_NAME=
@@ -89,7 +89,7 @@ Ejemplo conceptual en `~/.aws/config`:
 [profile base-profile]
 region = us-east-1
 
-[profile ml-data-prep-lab]
+[profile mlops-2-data-prep-lab]
 role_arn = arn:aws:iam::<account-id>:role/<role-name>
 source_profile = base-profile
 region = us-east-1
@@ -98,7 +98,7 @@ region = us-east-1
 Valida:
 
 ```bash
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 La AWS CLI pedira o reutilizara credenciales temporales segun el mecanismo configurado. No copies tokens temporales al repositorio.
@@ -147,7 +147,7 @@ pip install -r requirements.txt
 
 ## 6. Obtener Permisos Para Desplegar El Laboratorio
 
-Los permisos no se instalan localmente. Los asigna un administrador en AWS mediante IAM Identity Center, un permission set, una politica IAM o un IAM Role.
+Los permisos no se instalan localmente. Los asigna un administrador en AWS mediante IAM Identity Center, el Permission Set `MLOpsLab2Permission`, una politica IAM o un IAM Role.
 
 El usuario, profile o rol que ejecuta `make all-cloud` necesita permisos para:
 
@@ -170,23 +170,23 @@ Eso significa que CloudFormation puede crear un rol IAM con nombre para el Glue 
 Valida servicios basicos:
 
 ```bash
-aws cloudformation list-stacks --profile ml-data-prep-lab --region us-east-1
-aws s3 ls --profile ml-data-prep-lab --region us-east-1
-aws glue get-databases --profile ml-data-prep-lab --region us-east-1
-aws logs describe-log-groups --profile ml-data-prep-lab --region us-east-1
+aws cloudformation list-stacks --profile mlops-2-data-prep-lab --region us-east-1
+aws s3 ls --profile mlops-2-data-prep-lab --region us-east-1
+aws glue get-databases --profile mlops-2-data-prep-lab --region us-east-1
+aws logs describe-log-groups --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Validar identidad:
 
 ```bash
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Si cualquiera devuelve `AccessDenied`, comparte el error con el administrador AWS.
 
 ## 8. Permisos Minimos Conceptuales
 
-Para un entorno educativo aislado, el administrador puede asignar un permission set amplio de laboratorio. Para una cuenta compartida, pedir permisos acotados a recursos con prefijo:
+Para un entorno educativo aislado, el administrador puede asignar el Permission Set `MLOpsLab2Permission`. Para una cuenta compartida, pedir permisos acotados a recursos con prefijo:
 
 ```text
 ml-data-prep-lab
@@ -213,7 +213,7 @@ cp .env.example .env
 Ejemplo:
 
 ```text
-AWS_PROFILE=ml-data-prep-lab
+AWS_PROFILE=mlops-2-data-prep-lab
 AWS_REGION=us-east-1
 PROJECT_NAME=ml-data-processing-prep
 ENVIRONMENT=lab
@@ -236,7 +236,7 @@ No incluyas:
 ## 10. Validacion Final Antes Del Deploy
 
 ```bash
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 python --version
 python -m pytest -q
 ```
@@ -262,7 +262,7 @@ not authorized to perform: iam:GetRole
 not authorized to perform: iam:DeleteRolePolicy
 ```
 
-el profile puede usar servicios como S3, Glue o CloudFormation, pero no puede administrar roles IAM. Es comun en entornos con `PowerUserAccess` restringido.
+el profile puede usar servicios como S3, Glue o CloudFormation, pero no puede administrar roles IAM. Revisa que el Permission Set `MLOpsLab2Permission` incluya las acciones IAM necesarias para el laboratorio.
 
 Opcion A: pedir permisos temporales para crear y eliminar el rol del laboratorio:
 
@@ -311,13 +311,13 @@ Esto elimina el resto del stack y deja el rol IAM retenido para que el administr
 
 ## 12. Refrescar Login Cuando Cambian Permisos SSO
 
-Si estas usando AWS IAM Identity Center / SSO, los permisos se aplican al permission set que genera el rol asumido, por ejemplo:
+Si estas usando AWS IAM Identity Center / SSO, los permisos se aplican al Permission Set `MLOpsLab2Permission`, que genera el rol asumido, por ejemplo:
 
 ```text
-arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_PowerUserAccess_<id>/<user>
+arn:aws:sts::<account-id>:assumed-role/AWSReservedSSO_MLOpsLab2Permission_<id>/<user>
 ```
 
-La politica con permisos como `iam:DeleteRolePolicy` debe agregarse a ese permission set o rol SSO, no al rol `ml-data-prep-lab-glue-processing-role`.
+La politica con permisos como `iam:DeleteRolePolicy` debe agregarse al Permission Set `MLOpsLab2Permission` o al rol SSO correspondiente, no al rol `ml-data-prep-lab-glue-processing-role`.
 
 Incorrecto:
 
@@ -328,15 +328,15 @@ Agregar permisos al rol ml-data-prep-lab-glue-processing-role
 Correcto:
 
 ```text
-Agregar permisos al permission set o identity que usa tu AWS_PROFILE
+Agregar permisos al Permission Set MLOpsLab2Permission o identity que usa tu AWS_PROFILE
 ```
 
 Despues de que el administrador cambie permisos, cierra y vuelve a abrir sesion:
 
 ```bash
 aws sso logout
-aws sso login --profile ml-data-prep-lab
-aws sts get-caller-identity --profile ml-data-prep-lab --region us-east-1
+aws sso login --profile mlops-2-data-prep-lab
+aws sts get-caller-identity --profile mlops-2-data-prep-lab --region us-east-1
 ```
 
 Luego reintenta:
