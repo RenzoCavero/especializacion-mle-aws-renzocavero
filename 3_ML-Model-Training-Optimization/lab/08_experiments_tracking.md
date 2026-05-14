@@ -65,6 +65,15 @@ No hay wrapper `.ps1` especifico para este paso. En Windows usa el comando Pytho
 
 Internamente, `src.show_experiment_tracking` consulta SageMaker y escribe un resumen local.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper general | `scripts/lab.sh step 08` |
+| Modulo que consulta Experiments | `src/show_experiment_tracking.py` |
+| Helper que crea Experiment y Trials durante pasos previos | `src/experiments.py` |
+| Archivo local generado | `artifacts/local_outputs/experiment_tracking_report.json` |
+
 ## Resultado esperado
 
 Archivo local:

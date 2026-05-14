@@ -69,6 +69,14 @@ bash scripts/lab.sh step 00
 
 No hay wrapper PowerShell especifico para este paso. En Windows puedes usar el comando Python anterior.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper general | `scripts/lab.sh step 00` |
+| Modulo que imprime el paso | `src/lab_runner.py` |
+| Archivo de lectura del paso | `lab/00_contexto_negocio.md` |
+
 ## Resultado esperado
 
 La terminal imprime el encabezado del paso. No se crean recursos AWS, archivos locales ni objetos S3.

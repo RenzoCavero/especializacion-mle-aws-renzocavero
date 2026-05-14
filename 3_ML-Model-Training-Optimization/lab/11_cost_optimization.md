@@ -64,6 +64,14 @@ bash scripts/lab.sh step 11
 
 No hay wrapper `.ps1` especifico para este paso. En Windows usa el comando Python.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper general | `scripts/lab.sh step 11` |
+| Modulo que consulta recursos y costos operativos | `src/cost_and_resource_check.py` |
+| Archivo local generado | `artifacts/local_outputs/cost_and_resource_check.json` |
+
 ## Resultado esperado
 
 Archivo local:

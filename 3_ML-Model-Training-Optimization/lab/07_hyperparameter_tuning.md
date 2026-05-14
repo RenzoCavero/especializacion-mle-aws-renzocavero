@@ -117,6 +117,19 @@ python -m src.compare_models
 
 Importante: `scripts/run_hpo.sh` y `scripts/run_hpo.ps1` ejecutan HPO y evaluacion del modelo optimizado, pero no ejecutan `src.compare_models`. Si usas esos wrappers, ejecuta `python -m src.compare_models` despues.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash | `scripts/run_hpo.sh` |
+| Wrapper PowerShell | `scripts/run_hpo.ps1` |
+| Modulo que crea el Tuning Job | `src/submit_hpo_job.py` |
+| Servicio SageMaker usado | SageMaker Automatic Model Tuning con `HyperparameterTuner` |
+| Codigo remoto ejecutado por cada trial de HPO | `training/train.py` |
+| Modulo que evalua el modelo optimizado | `src/evaluate_model.py` |
+| Codigo remoto usado para evaluacion | `processing/evaluation_entrypoint.py` |
+| Modulo local que compara baseline vs optimized | `src/compare_models.py` |
+
 ## Resultado esperado
 
 S3:

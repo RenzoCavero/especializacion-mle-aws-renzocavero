@@ -68,6 +68,17 @@ Internamente:
 2. `src.upload_raw_data` sube el CSV a S3 en `raw/` y `processing/input/`.
 3. `src.upload_raw_data` actualiza `artifacts/local_outputs/run_state.json`.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash | `scripts/upload_training_data.sh` |
+| Wrapper PowerShell | `scripts/upload_training_data.ps1` |
+| Modulo que genera el CSV local | `src/generate_sample_data.py` |
+| Modulo que sube datos a S3 | `src/upload_raw_data.py` |
+| Dataset raw local | `data/local_cache/churn_raw.csv` |
+| Muestra local | `data/sample/churn_sample.csv` |
+
 ## Resultado esperado
 
 La terminal debe mostrar:

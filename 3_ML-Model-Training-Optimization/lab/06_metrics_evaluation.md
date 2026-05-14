@@ -83,6 +83,16 @@ Internamente:
 5. Calcula metricas.
 6. Escribe JSON y Markdown.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper general | `scripts/lab.sh step 06` |
+| Modulo que envia el Processing Job de evaluacion | `src/evaluate_model.py` |
+| Codigo remoto ejecutado en el Processing Job | `processing/evaluation_entrypoint.py` |
+| Librerias auxiliares montadas en el contenedor | `processing/` |
+| Artefacto de modelo evaluado | `s3://<S3_BUCKET>/output/baseline/<training-job>/output/model.tar.gz` |
+
 ## Resultado esperado
 
 La terminal debe mostrar:

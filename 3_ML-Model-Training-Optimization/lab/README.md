@@ -138,6 +138,33 @@ bash scripts/lab.sh cleanup
 .\scripts\destroy_infra.ps1
 ```
 
+## Mapa de scripts y codigo enviado a SageMaker
+
+En el laboratorio hay tres niveles de ejecucion:
+
+1. Wrapper de terminal: script Bash, PowerShell o target Make que ejecuta el estudiante.
+2. Modulo Python submitter: archivo en `src/` que llama APIs de AWS o SageMaker SDK.
+3. Codigo remoto: archivo que SageMaker ejecuta dentro de un Processing Job o Training Job.
+
+| Paso | Wrapper principal | Modulo Python que envia o consulta AWS | Servicio o accion | Codigo remoto ejecutado por SageMaker |
+|---|---|---|---|---|
+| 00 | `scripts/lab.sh step 00` | `src.lab_runner` | Solo imprime guia de contexto. | No aplica. |
+| 01 | `scripts/deploy_infra.sh`, `scripts/deploy_infra.ps1` | `src.deploy_infra` | Crea/actualiza CloudFormation, S3, IAM y CloudWatch. | No aplica. |
+| 02 | `scripts/upload_training_data.sh`, `scripts/upload_training_data.ps1` | `src.generate_sample_data`, `src.upload_raw_data` | Genera CSV local y sube objetos a S3. | No aplica. |
+| 03 | `scripts/create_feature_group.sh`, `scripts/ingest_features.sh` | `src.create_feature_group`, `src.ingest_features`, `src.get_online_features`, `src.query_offline_store` | Crea Feature Group, ingesta records, valida Online Store y Offline Store. | No aplica; usa APIs de Feature Store y S3. |
+| 04 | `scripts/run_processing_job.sh`, `scripts/run_processing_job.ps1` | `src.submit_processing_job` | Envia un SageMaker Processing Job. | `processing/processing_entrypoint.py` con soporte de `processing/`. |
+| 05 | `scripts/run_baseline_training.sh`, `scripts/run_baseline_training.ps1` | `src.submit_training_job` | Envia un SageMaker Training Job. | `training/train.py` con `training/requirements.txt`. |
+| 06 | `scripts/lab.sh step 06` o `python -m src.evaluate_model --model-name baseline` | `src.evaluate_model` | Envia un Processing Job de evaluacion. | `processing/evaluation_entrypoint.py` con soporte de `processing/`. |
+| 07 | `scripts/run_hpo.sh`, `scripts/run_hpo.ps1` | `src.submit_hpo_job`, `src.evaluate_model`, `src.compare_models` | Crea un SageMaker Hyperparameter Tuning Job, evalua el mejor modelo y compara metricas. | HPO ejecuta `training/train.py`; la evaluacion ejecuta `processing/evaluation_entrypoint.py`. |
+| 08 | `scripts/lab.sh step 08` | `src.show_experiment_tracking` | Consulta SageMaker Experiments y genera reporte local. | No aplica. |
+| 09 | `scripts/register_best_model.sh`, `scripts/register_best_model.ps1` | `src.compare_models`, `src.register_model`, `src.export_feature_metadata`, `src.training_report`, `src.model_card` | Registra un Model Package, sube metadata y reportes a S3. | No ejecuta job; empaqueta `training/inference.py` como codigo de inferencia futuro. |
+| 10 | `scripts/lab.sh step 10`; ejecucion con `python -m src.run_pipeline` | `src.create_pipeline`, `src.run_pipeline` | Crea/actualiza SageMaker Pipeline y opcionalmente inicia ejecucion. | Pipeline usa `processing/processing_entrypoint.py`, `training/train.py`, `processing/evaluation_entrypoint.py` y `RegisterModel`. |
+| 11 | `scripts/lab.sh step 11` | `src.cost_and_resource_check` | Consulta recursos activos y escribe reporte de costos/recursos. | No aplica. |
+| 12 | `scripts/destroy_infra.sh`, `scripts/destroy_infra.ps1` | `src.destroy_infra`, `src.cleanup_resources` | Elimina recursos SageMaker y CloudFormation. | No aplica. |
+| 13 | `scripts/lab.sh step 13` | `src.export_feature_metadata` | Exporta contrato de features local y a S3. | No aplica. |
+
+Los wrappers `scripts/lab.sh all` y `scripts/run_all_cloud.sh` ejecutan varios pasos en secuencia. El archivo `Makefile` expone los mismos pasos como targets `make lab-04-processing`, `make lab-05-training`, `make lab-07-hpo`, etc.
+
 ## Secuencia recomendada
 
 | Archivo | Proposito | Comando relacionado | Resultado esperado | Validacion en AWS Console |

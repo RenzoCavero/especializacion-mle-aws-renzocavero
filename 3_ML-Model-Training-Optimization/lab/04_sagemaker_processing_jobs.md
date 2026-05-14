@@ -174,6 +174,16 @@ Internamente:
 6. Ejecuta `processing/processing_entrypoint.py`.
 7. Descarga `preprocessing_metadata.json` a `artifacts/local_outputs/`.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash | `scripts/run_processing_job.sh` |
+| Wrapper PowerShell | `scripts/run_processing_job.ps1` |
+| Modulo que envia el job a SageMaker | `src/submit_processing_job.py` |
+| Codigo remoto ejecutado en el Processing Job | `processing/processing_entrypoint.py` |
+| Librerias auxiliares montadas en el contenedor | `processing/` |
+
 ## Resultado esperado
 
 La terminal debe mostrar un mensaje similar a:

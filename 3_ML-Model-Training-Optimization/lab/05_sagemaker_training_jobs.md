@@ -86,6 +86,17 @@ Internamente:
 5. Usa canales `train` y `validation`.
 6. Registra metricas `validation:accuracy`, `validation:precision`, `validation:recall`, `validation:f1` y `validation:roc_auc`.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash | `scripts/run_baseline_training.sh` |
+| Wrapper PowerShell | `scripts/run_baseline_training.ps1` |
+| Modulo que envia el Training Job a SageMaker | `src/submit_training_job.py` |
+| Codigo remoto ejecutado en el Training Job | `training/train.py` |
+| Directorio subido como source dir | `training/` |
+| Dependencias del contenedor de training | `training/requirements.txt` |
+
 Hiperparametros baseline:
 
 | Hiperparametro | Valor |

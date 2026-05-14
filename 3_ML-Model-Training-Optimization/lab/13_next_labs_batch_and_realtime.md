@@ -220,6 +220,16 @@ No hay wrapper `.ps1` especifico para este paso. En Windows usa el comando Pytho
 
 Internamente, `src.export_feature_metadata` lee `.env`, `.env.cloud` y `run_state.json`, construye el contrato con `src.feature_schema.build_feature_contract` y lo guarda localmente y en S3.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper general | `scripts/lab.sh step 13` |
+| Modulo que exporta el contrato | `src/export_feature_metadata.py` |
+| Schema usado para construir el contrato | `src/feature_schema.py` |
+| Archivo local generado | `artifacts/local_outputs/feature_contract.json` |
+| Objeto S3 generado | `s3://<S3_BUCKET>/model_registry_metadata/feature_contract.json` |
+
 ## Resultado esperado
 
 Local:

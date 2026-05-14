@@ -110,6 +110,16 @@ python -m src.fetch_stack_outputs
 
 `make lab-01-aws-setup` ejecuta directamente `python -m src.deploy_infra`, que usa boto3 para crear o actualizar el stack.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash | `scripts/deploy_infra.sh` |
+| Wrapper PowerShell | `scripts/deploy_infra.ps1` |
+| Modulo Python recomendado para desplegar infra | `src/deploy_infra.py` |
+| Modulo que escribe outputs locales | `src/fetch_stack_outputs.py` |
+| Template CloudFormation enviado a AWS | `infra/cloudformation/template.yaml` |
+
 ## Resultado esperado
 
 Archivos locales generados:

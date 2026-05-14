@@ -170,6 +170,20 @@ Internamente:
 3. `src.get_online_features` valida un `GetRecord` desde Online Store.
 4. `src.query_offline_store` lista objetos visibles en S3 bajo Offline Store.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash para crear Feature Group | `scripts/create_feature_group.sh` |
+| Wrapper PowerShell para crear Feature Group | `scripts/create_feature_group.ps1` |
+| Wrapper Bash para ingestar features | `scripts/ingest_features.sh` |
+| Wrapper PowerShell para ingestar features | `scripts/ingest_features.ps1` |
+| Modulo que crea el Feature Group | `src/create_feature_group.py` |
+| Modulo que llama `PutRecord` | `src/ingest_features.py` |
+| Modulo que valida Online Store | `src/get_online_features.py` |
+| Modulo que valida Offline Store en S3 | `src/query_offline_store.py` |
+| Schema de features usado por el lab | `src/feature_schema.py` |
+
 ## Resultado esperado
 
 Archivos locales:
@@ -255,3 +269,5 @@ aws sagemaker describe-feature-group \
 ## Conexion con laboratorios futuros
 
 El Online Store se usara para construir payloads de inferencia en tiempo real. El Offline Store o datasets derivados se usaran para inferencia batch.
+
+En un pipeline productivo, el Offline Store suele ser una de las fuentes del step `BuildTrainingDataset`. Ese step puede combinar features historicas con tablas curadas en S3, aplicar un join point-in-time correct, validar datos, separar train/validation/test y guardar los datasets finales en S3 para Training Jobs y HPO. El archivo `10_sagemaker_pipelines.md` describe ese patron con mas detalle.

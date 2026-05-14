@@ -66,6 +66,187 @@ Hay diferencias importantes:
 3. El paso 09 standalone agrega metadata adicional, contrato de features, `training_report.md` y `model_card.md`.
 4. Si quieres que el Pipeline incluya HPO, comparacion de modelos o reportes custom, tendrias que agregar steps adicionales.
 
+## Diseno realista con HPO y seleccion de modelo
+
+En un caso real, el Data Scientist suele empezar con un baseline para tener una referencia clara. Despues ejecuta HPO para buscar mejores hiperparametros. El resultado de HPO no deberia desplegarse automaticamente sin evaluacion y gobierno.
+
+Flujo recomendado:
+
+```text
+BuildTrainingDataset
+  -> TrainBaseline
+  -> TuneModel
+  -> ExtractBestHPOModel
+  -> EvaluateBaseline
+  -> EvaluateCandidate
+  -> CompareModels
+  -> CheckQualityGate
+  -> RegisterModel
+```
+
+### Que hace `TuneModel`
+
+`TuneModel` es el step de Hyperparameter Tuning. Lanza varios Training Jobs hijos con distintas combinaciones de hiperparametros y optimiza una metrica objetivo, por ejemplo:
+
+```text
+objective metric = validation:f1
+```
+
+Ejemplo conceptual:
+
+```text
+TuneModel
+  -> trial 001: C=0.1, max_iter=200, validation:f1=0.71
+  -> trial 002: C=1.0, max_iter=300, validation:f1=0.76
+  -> trial 003: C=5.0, max_iter=250, validation:f1=0.74
+```
+
+El objetivo de `TuneModel` es responder:
+
+```text
+Que hiperparametros generan el mejor desempeno en validacion?
+```
+
+### Que hace `ExtractBestHPOModel`
+
+`ExtractBestHPOModel` identifica el mejor Training Job hijo creado por HPO y extrae la informacion necesaria para el resto del pipeline:
+
+```text
+best_training_job_name
+best_model_artifact_s3_uri
+best_hyperparameters
+best_objective_metric_value
+```
+
+Ejemplo:
+
+```text
+HPO job: churn-hpo-001
+
+Child jobs:
+  churn-hpo-001-001 -> validation:f1 = 0.71
+  churn-hpo-001-002 -> validation:f1 = 0.76
+  churn-hpo-001-003 -> validation:f1 = 0.74
+
+ExtractBestHPOModel:
+  best_training_job = churn-hpo-001-002
+  best_model_artifact = s3://.../churn-hpo-001-002/output/model.tar.gz
+  best_hyperparameters = {...}
+```
+
+Despues de HPO tienes dos opciones validas:
+
+| Opcion | Flujo | Cuando usarla |
+|---|---|---|
+| Registrar el mejor artefacto de HPO | Evaluar `best_model_artifact_s3_uri` en test, comparar contra baseline/champion y registrar si pasa los gates. | Flujo simple y comun para primeras versiones MLOps. |
+| Reentrenar un modelo final | Usar `best_hyperparameters` en un Training Job final con el dataset final, evaluar y registrar ese artefacto. | Flujo mas riguroso cuando quieres entrenar con mas datos o separar busqueda de hiperparametros del modelo final. |
+
+La opcion mas conservadora en produccion suele ser:
+
+```text
+HPO encuentra hiperparametros
+  -> Training Job final usa esos hiperparametros
+  -> Evaluacion en test no visto
+  -> Comparacion contra baseline o champion
+  -> Registro en Model Registry
+  -> Aprobacion
+  -> Despliegue
+```
+
+Evita desplegar directamente desde HPO. Usa gates como:
+
+```text
+candidate_f1 >= baseline_f1 + minimum_delta
+candidate_recall >= required_recall
+candidate_roc_auc >= threshold
+data_quality_checks = passed
+manual_approval = required
+```
+
+## Donde entra Feature Store en un pipeline real
+
+Feature Store entra antes del entrenamiento y tambien antes de la inferencia.
+
+Para entrenamiento:
+
+```text
+Raw events or curated data
+  -> Feature engineering
+  -> Feature Store Offline Store
+  -> BuildTrainingDataset
+  -> train/validation/test datasets in S3
+  -> Training or HPO
+```
+
+Para inferencia real-time:
+
+```text
+Request with customer_id
+  -> GetRecord from Online Store
+  -> Build model payload
+  -> Invoke endpoint
+```
+
+HPO no lee directamente Feature Store. HPO entrena con datasets finales en S3. El Offline Store es la fuente historica que un step de Processing puede consultar para construir esos datasets.
+
+## Combinar datos curados de S3 con Feature Store
+
+En proyectos reales es normal que el dataset de entrenamiento combine varias fuentes:
+
+```text
+Curated S3 customer table
+  customer_id, segment, acquisition_channel
+
+Feature Store Offline Store
+  customer_id, event_time, engagement_score, payment_failures_last_90d
+
+Curated S3 labels table
+  customer_id, churn_label, label_date
+```
+
+El step `BuildTrainingDataset`, normalmente implementado como Processing Step, puede:
+
+1. Leer tablas curadas desde S3.
+2. Leer features historicas desde Offline Store usando S3, AWS Glue Data Catalog o Amazon Athena.
+3. Unir las fuentes por `customer_id` y ventanas de tiempo.
+4. Aplicar reglas de point-in-time correctness.
+5. Validar schema, nulos, rangos y duplicados.
+6. Aplicar transformaciones compartidas de feature engineering.
+7. Separar train/validation/test.
+8. Escribir los datasets finales en S3.
+
+Flujo:
+
+```text
+Curated S3 data
+    |
+    +--> BuildTrainingDataset Processing Step
+    |
+Feature Store Offline Store
+    |
+    v
+Join + validation + point-in-time filtering + split
+    |
+    v
+s3://.../datasets/churn/train/train.csv
+s3://.../datasets/churn/validation/validation.csv
+s3://.../datasets/churn/test/test.csv
+```
+
+Luego Training Jobs y HPO leen solo esos outputs finales de S3.
+
+La separacion limpia es:
+
+```text
+Feature Store / curated S3 = fuentes
+Processing Step = constructor del dataset
+S3 train/validation/test = inputs de entrenamiento
+Training/HPO = modelado
+Model Registry = gobierno del modelo
+```
+
+Nota importante: si usas features con timestamps, el join debe ser point-in-time correct. Para cada `label_date`, usa solamente features disponibles antes de esa fecha. Esto evita data leakage, es decir, entrenar con informacion que no habria estado disponible al momento real de predecir.
+
 ## Prerrequisitos
 
 1. Ejecuta desde:
@@ -119,6 +300,18 @@ python -m src.run_pipeline
 ```
 
 Advertencia: ejecutar el pipeline crea nuevos Processing Jobs, Training Jobs y posiblemente nuevos Model Packages. Eso genera costo adicional.
+
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper general para crear pipeline | `scripts/lab.sh step 10` |
+| Modulo que crea o actualiza la definicion | `src/create_pipeline.py` |
+| Modulo que inicia una ejecucion | `src/run_pipeline.py` |
+| Codigo remoto de `ProcessChurnFeatures` | `processing/processing_entrypoint.py` |
+| Codigo remoto de `TrainChurnBaseline` | `training/train.py` |
+| Codigo remoto de `EvaluateChurnModel` | `processing/evaluation_entrypoint.py` |
+| Registro condicional | `RegisterModel` de SageMaker SDK dentro de `src/create_pipeline.py` |
 
 ## Resultado esperado
 

@@ -87,6 +87,18 @@ Internamente:
 4. Vacia el bucket del stack si coincide con `S3_BUCKET_NAME`.
 5. Solicita eliminacion del stack CloudFormation.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash para cleanup cloud | `scripts/destroy_infra.sh` |
+| Wrapper PowerShell para cleanup cloud | `scripts/destroy_infra.ps1` |
+| Modulo principal de cleanup cloud | `src/destroy_infra.py` |
+| Modulo que elimina recursos SageMaker auxiliares | `src/cleanup_resources.py` |
+| Wrapper Bash para cleanup local | `scripts/clean_local_outputs.sh` |
+| Wrapper PowerShell para cleanup local | `scripts/clean_local_outputs.ps1` |
+| Modulo de cleanup local | `src/clean_local_outputs.py` |
+
 ## Limpieza de outputs locales
 
 La limpieza de AWS elimina recursos cloud. Si tambien quieres borrar artefactos locales generados por el laboratorio, usa el script local-only:

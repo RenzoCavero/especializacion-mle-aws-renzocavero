@@ -139,6 +139,19 @@ python -m src.model_card
 
 Importante: `scripts/register_best_model.sh` y `.ps1` ejecutan comparacion, registro y exportacion de metadata, pero no generan `training_report.md` ni `model_card.md`. Si usas esos wrappers, ejecuta los dos comandos Python adicionales.
 
+Rutas importantes:
+
+| Tipo | Ruta |
+|---|---|
+| Wrapper Bash | `scripts/register_best_model.sh` |
+| Wrapper PowerShell | `scripts/register_best_model.ps1` |
+| Modulo que registra el Model Package | `src/register_model.py` |
+| Modulo que exporta contrato de features | `src/export_feature_metadata.py` |
+| Modulo que genera reporte de training | `src/training_report.py` |
+| Modulo que genera model card local | `src/model_card.py` |
+| Codigo de inferencia empaquetado para despliegues futuros | `training/inference.py` |
+| Archivo que se sube a S3 como source de inferencia | `artifacts/local_outputs/inference_source.tar.gz` |
+
 ## Resultado esperado
 
 S3:
