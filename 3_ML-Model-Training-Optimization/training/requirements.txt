@@ -1,0 +1,7 @@
+# Intentionally empty.
+#
+# The managed SageMaker SKLearn framework image already includes compatible
+# versions of pandas, numpy, scikit-learn and joblib. Installing newer versions
+# here can break binary compatibility inside the container, especially pandas
+# and numpy. Keep extra training dependencies out unless the image version is
+# updated and the dependency set is tested end to end.
