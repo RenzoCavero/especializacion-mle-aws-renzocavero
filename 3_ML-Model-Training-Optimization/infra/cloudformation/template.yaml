@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Base infrastructure for Lab 03 - AWS model training and optimization.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ml-model-training-optimization
+  Environment:
+    Type: String
+    Default: lab
+  ResourcePrefix:
+    Type: String
+    Default: ml-training-opt-lab
+  S3BucketName:
+    Type: String
+    Default: ""
+    Description: Optional globally unique bucket name. Leave empty to let CloudFormation generate one.
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+
+Conditions:
+  HasBucketName: !Not [!Equals [!Ref S3BucketName, ""]]
+
+Resources:
+  LabBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If [HasBucketName, !Ref S3BucketName, !Ref AWS::NoValue]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      Tags:
+        - Key: Project
+          Value: MLModelTrainingOptimization
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: Student
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Project
+          Value: MLModelTrainingOptimization
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: Student
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  SageMakerExecutionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LabSageMakerExecutionPolicy
+      Roles:
+        - !Ref SageMakerExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: S3LabBucketAccess
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
+            Resource:
+              - !GetAtt LabBucket.Arn
+              - !Join ["", [!GetAtt LabBucket.Arn, "/*"]]
+          - Sid: FeatureStoreGlueCatalogAccess
+            Effect: Allow
+            Action:
+              - glue:GetTable
+              - glue:UpdateTable
+            Resource:
+              - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
+              - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/sagemaker_featurestore
+              - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/sagemaker_featurestore/*
+          - Sid: CloudWatchLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/*
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${ResourcePrefix}/sagemaker-lab*
+          - Sid: EcrPullForManagedImages
+            Effect: Allow
+            Action:
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+            Resource: "*"
+          - Sid: SageMakerLabOperations
+            Effect: Allow
+            Action:
+              - sagemaker:CreateProcessingJob
+              - sagemaker:DescribeProcessingJob
+              - sagemaker:StopProcessingJob
+              - sagemaker:ListProcessingJobs
+              - sagemaker:CreateTrainingJob
+              - sagemaker:DescribeTrainingJob
+              - sagemaker:StopTrainingJob
+              - sagemaker:ListTrainingJobs
+              - sagemaker:CreateHyperParameterTuningJob
+              - sagemaker:DescribeHyperParameterTuningJob
+              - sagemaker:StopHyperParameterTuningJob
+              - sagemaker:ListHyperParameterTuningJobs
+              - sagemaker:CreateFeatureGroup
+              - sagemaker:DescribeFeatureGroup
+              - sagemaker:DeleteFeatureGroup
+              - sagemaker:ListFeatureGroups
+              - sagemaker:PutRecord
+              - sagemaker:GetRecord
+              - sagemaker:BatchGetRecord
+              - sagemaker:CreateExperiment
+              - sagemaker:DescribeExperiment
+              - sagemaker:DeleteExperiment
+              - sagemaker:ListExperiments
+              - sagemaker:CreateTrial
+              - sagemaker:DescribeTrial
+              - sagemaker:DeleteTrial
+              - sagemaker:ListTrials
+              - sagemaker:CreateTrialComponent
+              - sagemaker:AssociateTrialComponent
+              - sagemaker:DisassociateTrialComponent
+              - sagemaker:ListTrialComponents
+              - sagemaker:BatchPutMetrics
+              - sagemaker:CreateModelPackageGroup
+              - sagemaker:DescribeModelPackageGroup
+              - sagemaker:DeleteModelPackageGroup
+              - sagemaker:CreateModelPackage
+              - sagemaker:DescribeModelPackage
+              - sagemaker:DeleteModelPackage
+              - sagemaker:ListModelPackages
+              - sagemaker:UpdateModelPackage
+              - sagemaker:CreatePipeline
+              - sagemaker:UpdatePipeline
+              - sagemaker:DeletePipeline
+              - sagemaker:StartPipelineExecution
+              - sagemaker:DescribePipeline
+              - sagemaker:DescribePipelineExecution
+              - sagemaker:ListPipelineExecutions
+              - sagemaker:AddTags
+            Resource: "*"
+          - Sid: PassThisRoleToSageMaker
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !GetAtt SageMakerExecutionRole.Arn
+            Condition:
+              StringEquals:
+                iam:PassedToService: sagemaker.amazonaws.com
+
+  SageMakerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /${ResourcePrefix}/sagemaker-lab
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Project
+          Value: MLModelTrainingOptimization
+        - Key: Environment
+          Value: Lab
+        - Key: ManagedBy
+          Value: IaC
+
+Outputs:
+  BucketName:
+    Description: S3 bucket for lab datasets, artifacts, metrics and reports.
+    Value: !Ref LabBucket
+  SageMakerExecutionRoleArn:
+    Description: Execution role ARN for SageMaker jobs.
+    Value: !GetAtt SageMakerExecutionRole.Arn
+  StackName:
+    Description: CloudFormation stack name.
+    Value: !Ref AWS::StackName
+  LabLogGroupName:
+    Description: Lab-owned CloudWatch log group. SageMaker jobs also write to AWS-managed /aws/sagemaker/* groups.
+    Value: !Ref SageMakerLogGroup
