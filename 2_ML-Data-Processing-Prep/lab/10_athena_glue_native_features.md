@@ -9,6 +9,18 @@ Este capitulo muestra como usar servicios nativos de AWS sobre los datasets gene
 
 Estos pasos son opcionales. No se ejecutan dentro de `make all-cloud` para controlar costo y tiempo de ejecucion.
 
+Comando agrupado:
+
+```bash
+bash scripts/lab.sh step 10
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 step 10
+```
+
 ## Prerrequisitos
 
 Ejecuta primero el flujo base:
@@ -264,7 +276,7 @@ En proyectos reales, un crawler es util cuando:
 - Quieres poblar el Glue Data Catalog sin escribir a mano cada tabla.
 - Tienes particiones S3 y quieres que el catalogo las descubra.
 
-En este laboratorio, el pipeline principal no depende del crawler porque el objetivo es ensenar reproducibilidad. Para ML, normalmente quieres que los esquemas de entrenamiento e inferencia sean explicitos y estables.
+En este laboratorio, el pipeline principal no depende del crawler porque el objetivo es mantener reproducibilidad. Para ML, normalmente quieres que los esquemas de entrenamiento e inferencia sean explicitos y estables.
 
 ### Recurso Creado Por Infraestructura
 
@@ -441,7 +453,7 @@ SELECT COUNT(*) AS rows
 FROM raw_transactions;
 ```
 
-Si ambos conteos son similares, el crawler pudo leer la misma fuente conceptual. Si los tipos son diferentes, usa eso como conversacion de clase: la inferencia automatica no siempre produce el contrato ideal para ML.
+Si ambos conteos son similares, el crawler pudo leer la misma fuente conceptual. Si los tipos son diferentes, usa esa comparacion para recordar que la inferencia automatica no siempre produce el contrato ideal para ML.
 
 ### Comparar Manual Vs Crawler
 
@@ -465,7 +477,7 @@ La version manual es preferida para el pipeline porque:
 
 La version crawler sirve para aprender como Glue descubre datos en S3.
 
-### Como Explicarlo En Clase
+### Como Interpretarlo
 
 Secuencia recomendada:
 
@@ -474,7 +486,7 @@ Secuencia recomendada:
 3. Ejecutar `python -m src.register_catalog` y mostrar tablas manuales.
 4. Ejecutar `bash scripts/run_glue_crawler.sh`.
 5. Comparar `raw_transactions` vs `crawler_transactions`.
-6. Preguntar: cual usarias para un pipeline ML productivo y por que?
+6. Elegir la tabla segun el objetivo: discovery con crawler o contrato controlado con tablas definidas en codigo.
 
 Respuesta esperada:
 
@@ -1070,7 +1082,7 @@ Glue Column Statistics:
 - Puede ayudar a motores de consulta y tareas de catalogacion.
 - No reemplaza completamente un reporte de profiling de ML.
 
-### Como Explicarlo En Clase
+### Como Interpretarlo
 
 Usa esta comparacion:
 
@@ -1166,9 +1178,9 @@ artifacts/local_outputs/quality/glue_data_quality_result.json
 artifacts/local_outputs/profiles/glue_column_statistics_features_training.json
 ```
 
-## 5.1 Secuencia Recomendada Para Ensenar Estos Tres Servicios
+## 5.1 Secuencia Recomendada Para Recorrer Estos Tres Servicios
 
-Para una clase, usa esta historia:
+Usa esta historia:
 
 ```text
 1. Ya tengo datos procesados en S3 y tablas principales en Glue.

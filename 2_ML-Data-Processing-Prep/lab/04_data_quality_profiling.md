@@ -20,8 +20,16 @@ Las reglas de calidad revisan:
 Comandos:
 
 ```bash
+bash scripts/lab.sh step 04
 make profile
 make quality
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 step 04
+.\scripts\run_processing_job.ps1 -Steps profile,quality
 ```
 
 Outputs:
@@ -94,6 +102,19 @@ Para ejecutar ambos en un solo Glue Job:
 bash scripts/run_processing_job.sh profile,quality
 ```
 
+## Rutas De Ejecucion
+
+| Nivel | Ruta |
+|---|---|
+| Runner numerado | `scripts/lab.sh step 04` o `scripts/lab.ps1 step 04` |
+| Script directo | `scripts/run_processing_job.sh profile,quality` o `scripts/run_processing_job.ps1 -Steps profile,quality` |
+| Modulo que envia el job | `src.run_processing_job` |
+| Codigo remoto en Glue | `s3://<bucket>/scripts/glue_pipeline.py` |
+| Paquete remoto | `s3://<bucket>/scripts/ml_data_prep_src.zip` |
+| Logica de profiling | `src.data_profiling.build_profile` |
+| Logica de calidad | `src.data_quality.validate_raw_data` |
+| Outputs S3 | `profiles/profile.json`, `quality/quality_report.json` |
+
 ## Como Leer Los Reportes
 
 Despues de descargar reportes:
@@ -110,6 +131,16 @@ artifacts/local_outputs/quality/quality_report.json
 ```
 
 Si la calidad falla con reglas criticas, el pipeline debe detenerse antes de producir datasets finales. Esto simula una practica real de ML: no entrenar modelos con datasets que incumplen reglas basicas.
+
+## Validacion En AWS Console
+
+1. Abre AWS Glue.
+2. Ve a ETL jobs.
+3. Abre `ml-data-prep-lab-processing-job`.
+4. Entra a `Runs` y busca el ultimo run.
+5. Verifica que el estado sea `Succeeded`.
+6. Desde el run, abre los logs en CloudWatch si necesitas revisar mensajes como `Wrote profiles/profile.json` o `Wrote quality/quality_report.json`.
+7. Abre Amazon S3 y confirma los objetos `profiles/profile.json` y `quality/quality_report.json`.
 
 ## Como Leer `profile.json`
 

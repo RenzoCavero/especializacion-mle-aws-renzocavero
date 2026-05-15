@@ -156,7 +156,7 @@ pip install -r requirements.txt
 ## Ejecucion Completa
 
 ```bash
-make all-cloud
+make lab
 ```
 
 El comando:
@@ -168,6 +168,27 @@ El comando:
 5. Ejecuta el Glue Job con todos los pasos.
 6. Descarga reportes.
 7. Valida outputs esperados.
+
+Equivalente directo:
+
+```bash
+bash scripts/lab.sh all
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 all
+```
+
+Para listar o ejecutar pasos por capitulo:
+
+```bash
+bash scripts/lab.sh list
+bash scripts/lab.sh step 05
+```
+
+La relacion completa entre capitulos Markdown, scripts, modulos Python y recursos AWS esta en `lab/README.md`.
 
 ## Ejecucion Sin Make
 
@@ -227,6 +248,16 @@ make destroy-infra
 ```
 
 Para evitar multiples ejecuciones de Glue y reducir costo, usa `make all-cloud` durante el flujo normal.
+
+Tambien puedes usar targets numerados:
+
+```bash
+make lab-01-aws-setup
+make lab-02-data-lake-s3
+make lab-03-glue-catalog
+make lab-05-processing-jobs
+make lab-09-cost-security-cleanup
+```
 
 ## Extras AWS Nativos Opcionales
 
@@ -310,6 +341,18 @@ make destroy-infra
 ```
 
 El script vacia el bucket del laboratorio y elimina el stack. Ejecutalo al terminar para evitar costos.
+
+Para borrar solo archivos locales generados por el laboratorio, sin tocar AWS:
+
+```bash
+make clean-local-outputs
+```
+
+Vista previa:
+
+```bash
+python -m src.clean_local_outputs --dry-run
+```
 
 ## Troubleshooting CloudFormation
 

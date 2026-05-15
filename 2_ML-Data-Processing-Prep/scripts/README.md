@@ -14,6 +14,28 @@ Por eso se pueden ejecutar desde la raiz del proyecto con comandos como:
 bash scripts/upload_sample_data.sh
 ```
 
+## Runner Numerado Del Laboratorio
+
+Para ejecutar el laboratorio con la misma numeracion de `lab/*.md`, usa:
+
+```bash
+bash scripts/lab.sh list
+bash scripts/lab.sh step 02
+bash scripts/lab.sh all
+bash scripts/lab.sh cleanup
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 list
+.\scripts\lab.ps1 step 02
+.\scripts\lab.ps1 all
+.\scripts\lab.ps1 cleanup
+```
+
+El runner ejecuta `python -m src.lab_runner`. Cada paso llama los mismos modulos Python documentados abajo; no cambia la logica del laboratorio, solo la ordena por capitulo.
+
 ## Respuesta Corta Sobre `upload_sample_data.sh`
 
 Si ejecutas:
@@ -61,6 +83,7 @@ Esta tabla conecta cada comando operativo con el modulo Python que ejecuta, el c
 
 | Paso operativo | Script Bash | Modulo Python | Capitulo relacionado | Recurso AWS principal | Output esperado |
 |---|---|---|---|---|---|
+| Ejecutar pasos numerados | `bash scripts/lab.sh <step|all|cleanup>` | `python -m src.lab_runner` | Todo `lab/*.md` | Segun el paso ejecutado | Ejecucion alineada a capitulos Markdown |
 | Desplegar infraestructura | `bash scripts/deploy_infra.sh` | `python -m src.deploy_infra` | `lab/01_aws_setup.md`, `lab/09_cost_security_cleanup.md`, `infra/README.md` | CloudFormation, S3, IAM, Glue, CloudWatch Logs | Stack `ml-data-prep-lab-stack`, bucket S3, Glue Database, Glue Job, rol IAM y log group |
 | Generar datos sinteticos | Incluido en `bash scripts/upload_sample_data.sh` | `python -m src.generate_sample_data` | `lab/00_contexto_negocio.md`, `lab/04_data_quality_profiling.md` | Local filesystem | CSV en `data/sample/customers.csv`, `data/sample/transactions.csv`, `data/sample/inference_transactions.csv` |
 | Subir datos raw y assets Glue | `bash scripts/upload_sample_data.sh` | `python -m src.upload_raw_data` | `lab/02_data_lake_s3.md`, `lab/05_processing_jobs.md` | Amazon S3 | Datos en `s3://<bucket>/raw/`, copias raw para Athena y assets en `s3://<bucket>/scripts/` |
@@ -71,6 +94,7 @@ Esta tabla conecta cada comando operativo con el modulo Python que ejecuta, el c
 | Calcular Column Statistics | `bash scripts/run_glue_column_statistics.sh` | `python -m src.run_glue_column_statistics` | `lab/03_glue_catalog.md`, `lab/10_athena_glue_native_features.md` | AWS Glue Data Catalog Column Statistics | Estadisticas en Glue Catalog y copia `profiles/glue_column_statistics_features_training.json` |
 | Descargar reportes | `bash scripts/download_reports.sh` | `python -m src.download_reports` | `lab/04_data_quality_profiling.md`, `lab/08_governance_lineage.md` | Amazon S3 | Copia local en `artifacts/local_outputs/` |
 | Validar outputs | Sin `.sh` dedicado; incluido en `run_all_cloud.sh` | `python -m src.validate_outputs` | `lab/05_processing_jobs.md`, `lab/09_cost_security_cleanup.md` | S3, Glue Data Catalog | Validacion de objetos S3 esperados, copias para Athena, tablas Glue y ubicaciones `Location` |
+| Limpiar outputs locales | `bash scripts/clean_local_outputs.sh` | `python -m src.clean_local_outputs` | `lab/09_cost_security_cleanup.md` | Local filesystem | Borra `data/sample/*.csv`, `data/local_cache/` y `artifacts/local_outputs/` sin tocar AWS |
 | Ejecutar laboratorio completo | `bash scripts/run_all_cloud.sh` | `src.deploy_infra`, `src.generate_sample_data`, `src.upload_raw_data`, `src.register_catalog`, `src.run_processing_job`, `src.download_reports`, `src.validate_outputs` | Todo `lab/*.md` | CloudFormation, S3, IAM, Glue, CloudWatch Logs | Laboratorio completo desplegado, ejecutado, descargado y validado |
 | Destruir infraestructura | `bash scripts/destroy_infra.sh` | `python -m src.destroy_infra` | `lab/09_cost_security_cleanup.md` | CloudFormation, S3, IAM, Glue, CloudWatch Logs | Bucket vaciado y stack eliminado |
 
@@ -95,7 +119,7 @@ bash scripts/download_reports.sh
 python -m src.validate_outputs
 ```
 
-Para clase, si quieres conectar el laboratorio con Glue Crawler, Glue Data Quality, Column Statistics y Athena, usa esta secuencia extendida:
+Para conectar el laboratorio con Glue Crawler, Glue Data Quality, Column Statistics y Athena, usa esta secuencia extendida:
 
 ```bash
 bash scripts/deploy_infra.sh
@@ -128,7 +152,7 @@ Los tres scripts siguientes no reemplazan el pipeline principal. Sirven para mos
 
 ### Glue Crawler En La Practica
 
-Usalo para ensenar descubrimiento automatico:
+Usalo para validar descubrimiento automatico:
 
 ```bash
 bash scripts/run_glue_crawler.sh
@@ -154,7 +178,7 @@ Usalo para comparar `crawler_transactions` contra `raw_transactions`. La tabla `
 
 ### Glue Data Quality En La Practica
 
-Usalo para ensenar reglas administradas:
+Usalo para validar reglas administradas:
 
 ```bash
 bash scripts/run_glue_data_quality.sh
@@ -182,7 +206,7 @@ Si falla, revisa `quality/glue_data_quality_result.json` y el panel `Data qualit
 
 ### Glue Column Statistics En La Practica
 
-Usalo para ensenar estadisticas administradas del catalogo:
+Usalo para validar estadisticas administradas del catalogo:
 
 ```bash
 bash scripts/run_glue_column_statistics.sh
@@ -728,6 +752,8 @@ No necesitas ejecutar `bash scripts/deploy_infra.sh` otra vez para este caso, po
 
 | Make | Bash equivalente |
 |---|---|
+| `make lab` | `bash scripts/lab.sh all` |
+| `make lab-02-data-lake-s3` | `bash scripts/lab.sh step 02` |
 | `make deploy-infra` | `bash scripts/deploy_infra.sh` |
 | `make data` | `python -m src.generate_sample_data` |
 | `make upload-raw` | `python -m src.upload_raw_data` o `bash scripts/upload_sample_data.sh` si tambien quieres regenerar datos antes |
@@ -745,6 +771,7 @@ No necesitas ejecutar `bash scripts/deploy_infra.sh` otra vez para este caso, po
 | `make lineage` | `bash scripts/run_processing_job.sh lineage` |
 | `make dataset-card` | `bash scripts/run_processing_job.sh dataset-card` |
 | `make download-reports` | `bash scripts/download_reports.sh` |
+| `make clean-local-outputs` | `bash scripts/clean_local_outputs.sh` |
 | `make validate` | `python -m src.validate_outputs` |
 | `make destroy-infra` | `bash scripts/destroy_infra.sh` |
 | `make all-cloud` | `bash scripts/run_all_cloud.sh` |

@@ -18,9 +18,17 @@ Zonas:
 Comandos:
 
 ```bash
+bash scripts/lab.sh step 02
 make data
 make upload-raw
 aws s3 ls s3://<bucket-name>/raw/ --profile <profile> --region <region>
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 step 02
+.\scripts\upload_sample_data.ps1
 ```
 
 ## Que Significa Cada Zona
@@ -65,6 +73,17 @@ s3://<bucket>/scripts/glue_pipeline.py
 
 Nota: este script no ejecuta `python -m src.register_catalog`. La subida a `raw/` y el catalogo son etapas separadas.
 
+## Rutas De Ejecucion
+
+| Nivel | Ruta |
+|---|---|
+| Runner numerado | `scripts/lab.sh step 02` o `scripts/lab.ps1 step 02` |
+| Script directo | `scripts/upload_sample_data.sh` o `scripts/upload_sample_data.ps1` |
+| Modulos Python | `src.generate_sample_data`, `src.upload_raw_data`, `src.package_job_assets` |
+| Codigo subido a Glue | `s3://<bucket>/scripts/glue_pipeline.py`, `s3://<bucket>/scripts/ml_data_prep_src.zip` |
+| Datos locales | `data/sample/customers.csv`, `data/sample/transactions.csv`, `data/sample/inference_transactions.csv` |
+| Datos S3 | `s3://<bucket>/raw/` |
+
 ## Validar La Capa Raw
 
 ```bash
@@ -77,3 +96,13 @@ Si `raw/` no existe o esta vacio, revisa:
 - Que la infraestructura este desplegada.
 - Que `.env` tenga `AWS_PROFILE`, `AWS_REGION` y, si aplica, `S3_BUCKET_NAME`.
 - Que tu profile tenga permisos `s3:PutObject`, `s3:GetObject` y `s3:ListBucket`.
+
+## Validacion En AWS Console
+
+1. Abre Amazon S3.
+2. Entra al bucket generado por CloudFormation.
+3. Revisa el prefijo `raw/`.
+4. Confirma que existen `customers.csv`, `transactions.csv` e `inference_transactions.csv`.
+5. Revisa el prefijo `scripts/`.
+6. Confirma que existen `glue_pipeline.py` y `ml_data_prep_src.zip`.
+7. Verifica que los archivos tengan tamano mayor a cero.

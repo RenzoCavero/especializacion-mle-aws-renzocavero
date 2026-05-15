@@ -12,7 +12,7 @@ Si trabajas en una organizacion, pide al administrador una de estas opciones:
 - Un IAM Role que puedas asumir.
 - Un usuario temporal de laboratorio con permisos acotados.
 
-Evita usar el usuario root. No uses access keys permanentes salvo que el instructor o administrador lo indique explicitamente para un entorno controlado.
+Evita usar el usuario root. No uses access keys permanentes salvo que el administrador del entorno lo indique explicitamente para un laboratorio controlado.
 
 ## 2. Instalar AWS CLI
 
@@ -370,6 +370,15 @@ python -m src.register_catalog
 bash scripts/run_processing_job.sh all
 ```
 
+Con el runner numerado:
+
+```bash
+bash scripts/lab.sh step 01
+bash scripts/lab.sh step 02
+bash scripts/lab.sh step 03
+bash scripts/lab.sh step 05
+```
+
 Para entender que hace cada script antes de ejecutarlo, lee:
 
 ```text
@@ -383,3 +392,19 @@ lab/02_data_lake_s3.md
 lab/03_glue_catalog.md
 lab/05_processing_jobs.md
 ```
+
+## Validacion En AWS Console
+
+Despues de `bash scripts/lab.sh step 01`:
+
+1. Abre AWS Console en la region configurada en `AWS_REGION`.
+2. Ve a CloudFormation > Stacks.
+3. Busca `ml-data-prep-lab-stack`.
+4. Verifica que el estado sea `CREATE_COMPLETE` o `UPDATE_COMPLETE`.
+5. Abre la pestana `Outputs` y ubica `BucketName`, `GlueDatabaseName`, `GlueJobName`, `GlueCrawlerName`, `ProcessingRoleArn` y `LogGroupName`.
+6. Ve a Amazon S3 y confirma que existe el bucket del output `BucketName`.
+7. Ve a AWS Glue > Databases y confirma la base `ml_data_prep_lab`.
+8. Ve a AWS Glue > ETL jobs y confirma el job `ml-data-prep-lab-processing-job`.
+9. Ve a CloudWatch > Log groups y confirma el log group `/aws/ml-data-prep-lab/processing`.
+
+Si algun recurso no aparece, confirma primero la region de la consola. La causa mas comun es estar mirando otra region.
