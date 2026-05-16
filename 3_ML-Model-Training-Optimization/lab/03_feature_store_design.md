@@ -270,4 +270,6 @@ aws sagemaker describe-feature-group \
 
 El Online Store se usara para construir payloads de inferencia en tiempo real. El Offline Store o datasets derivados se usaran para inferencia batch.
 
+En este laboratorio, el paso 04 ya usa ese patron de forma simplificada: un Processing Job consulta la tabla del Offline Store mediante AWS Glue Data Catalog y Amazon Athena, materializa los registros mas recientes por `customer_id`, aplica transformaciones y guarda `train.csv`, `validation.csv` y `test.csv` en S3. Training Jobs y HPO consumen esos archivos finales.
+
 En un pipeline productivo, el Offline Store suele ser una de las fuentes del step `BuildTrainingDataset`. Ese step puede combinar features historicas con tablas curadas en S3, aplicar un join point-in-time correct, validar datos, separar train/validation/test y guardar los datasets finales en S3 para Training Jobs y HPO. El archivo `10_sagemaker_pipelines.md` describe ese patron con mas detalle.

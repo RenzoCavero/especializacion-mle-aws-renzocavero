@@ -29,10 +29,12 @@ Al finalizar, habras ejecutado un ciclo completo para un caso de churn:
 | AWS IAM | Rol de ejecucion de SageMaker y permisos acotados. |
 | Amazon CloudWatch | Logs de Processing Jobs y Training Jobs. |
 | AWS Glue Data Catalog | Metadata del Offline Store de Feature Store. |
+| Amazon Athena | Materializacion del Offline Store para construir datasets de training. |
 | Amazon SageMaker Feature Store | Online Store y Offline Store para features. |
 | SageMaker Processing Jobs | Preparacion de datos y evaluacion de modelos. |
 | SageMaker Training Jobs | Entrenamiento baseline y trials de HPO. |
 | SageMaker Automatic Model Tuning | Busqueda de hiperparametros. |
+| SageMaker Autopilot | AutoML opcional para comparar contra el flujo manual. |
 | SageMaker Experiments | Tracking de jobs, trials y metadata. |
 | SageMaker Model Registry | Versionado y aprobacion del modelo. |
 | SageMaker Pipelines | Definicion automatizada process/train/evaluate/register. |
@@ -92,6 +94,9 @@ Edita `.env` y revisa:
 | `TRAINING_INSTANCE_TYPE` | `ml.t3.medium` | Instancia principal para Training. |
 | `HPO_MAX_JOBS` | `4` | Numero maximo de trials HPO. |
 | `HPO_MAX_PARALLEL_JOBS` | `1` | Paralelismo de HPO. |
+| `FEATURE_DATA_SOURCE` | `offline_store` | Fuente principal para construir train/validation/test. |
+| `ALLOW_FEATURE_SNAPSHOT_FALLBACK` | `true` | Permite fallback al snapshot si Offline Store aun no tiene filas. |
+| `AUTOPILOT_MAX_CANDIDATES` | `3` | Candidatos maximos para el demo opcional de Autopilot. |
 
 No guardes credenciales en `.env`. No commitees `.env` ni `.env.cloud`.
 
@@ -130,6 +135,16 @@ python -m src.lab_runner step 04
 bash scripts/lab.sh step 04
 ```
 
+Demo opcional de Autopilot, despues del paso 04:
+
+```bash
+make autopilot
+bash scripts/run_autopilot.sh
+python -m src.submit_autopilot_job
+```
+
+No se incluye en `all` porque AutoML puede generar costo adicional.
+
 Cleanup:
 
 ```bash
@@ -152,7 +167,7 @@ En el laboratorio hay tres niveles de ejecucion:
 | 01 | `scripts/deploy_infra.sh`, `scripts/deploy_infra.ps1` | `src.deploy_infra` | Crea/actualiza CloudFormation, S3, IAM y CloudWatch. | No aplica. |
 | 02 | `scripts/upload_training_data.sh`, `scripts/upload_training_data.ps1` | `src.generate_sample_data`, `src.upload_raw_data` | Genera CSV local y sube objetos a S3. | No aplica. |
 | 03 | `scripts/create_feature_group.sh`, `scripts/ingest_features.sh` | `src.create_feature_group`, `src.ingest_features`, `src.get_online_features`, `src.query_offline_store` | Crea Feature Group, ingesta records, valida Online Store y Offline Store. | No aplica; usa APIs de Feature Store y S3. |
-| 04 | `scripts/run_processing_job.sh`, `scripts/run_processing_job.ps1` | `src.submit_processing_job` | Envia un SageMaker Processing Job. | `processing/processing_entrypoint.py` con soporte de `processing/`. |
+| 04 | `scripts/run_processing_job.sh`, `scripts/run_processing_job.ps1` | `src.submit_processing_job` | Envia un SageMaker Processing Job que materializa Offline Store via Athena y genera datasets. | `processing/processing_entrypoint.py` con soporte de `processing/`. |
 | 05 | `scripts/run_baseline_training.sh`, `scripts/run_baseline_training.ps1` | `src.submit_training_job` | Envia un SageMaker Training Job. | `training/train.py` con `training/requirements.txt`. |
 | 06 | `scripts/lab.sh step 06` o `python -m src.evaluate_model --model-name baseline` | `src.evaluate_model` | Envia un Processing Job de evaluacion. | `processing/evaluation_entrypoint.py` con soporte de `processing/`. |
 | 07 | `scripts/run_hpo.sh`, `scripts/run_hpo.ps1` | `src.submit_hpo_job`, `src.evaluate_model`, `src.compare_models` | Crea un SageMaker Hyperparameter Tuning Job, evalua el mejor modelo y compara metricas. | HPO ejecuta `training/train.py`; la evaluacion ejecuta `processing/evaluation_entrypoint.py`. |
@@ -162,6 +177,7 @@ En el laboratorio hay tres niveles de ejecucion:
 | 11 | `scripts/lab.sh step 11` | `src.cost_and_resource_check` | Consulta recursos activos y escribe reporte de costos/recursos. | No aplica. |
 | 12 | `scripts/destroy_infra.sh`, `scripts/destroy_infra.ps1` | `src.destroy_infra`, `src.cleanup_resources` | Elimina recursos SageMaker y CloudFormation. | No aplica. |
 | 13 | `scripts/lab.sh step 13` | `src.export_feature_metadata` | Exporta contrato de features local y a S3. | No aplica. |
+| Opcional | `scripts/run_autopilot.sh`, `scripts/run_autopilot.ps1` | `src.submit_autopilot_job` | Crea un AutoML Job V2 pequeno para comparar candidatos automaticos. | Autopilot gestiona sus propios jobs internos. |
 
 Los wrappers `scripts/lab.sh all` y `scripts/run_all_cloud.sh` ejecutan varios pasos en secuencia. El archivo `Makefile` expone los mismos pasos como targets `make lab-04-processing`, `make lab-05-training`, `make lab-07-hpo`, etc.
 
@@ -173,7 +189,7 @@ Los wrappers `scripts/lab.sh all` y `scripts/run_all_cloud.sh` ejecutan varios p
 | `01_aws_setup.md` | Crear infraestructura base. | `make lab-01-aws-setup` | Stack, bucket, rol y `.env.cloud`. | CloudFormation, S3, IAM, CloudWatch. |
 | `02_training_data_s3.md` | Generar y subir datos. | `make lab-02-training-data` | CSV local y objetos en S3. | S3 > `raw/` y `processing/input/`. |
 | `03_feature_store_design.md` | Crear e ingestar Feature Group. | `make lab-03-feature-store` | Online Store validado y Offline Store en S3. | SageMaker Feature Store, S3, Glue. |
-| `04_sagemaker_processing_jobs.md` | Preparar train/validation/test. | `make lab-04-processing` | Processing Job y datasets procesados. | SageMaker Processing jobs, S3, CloudWatch. |
+| `04_sagemaker_processing_jobs.md` | Preparar train/validation/test desde Offline Store. | `make lab-04-processing` | Processing Job, consulta Athena y datasets procesados. | SageMaker Processing jobs, Athena, Glue, S3, CloudWatch. |
 | `05_sagemaker_training_jobs.md` | Entrenar baseline. | `make lab-05-training` | Training Job y `model.tar.gz`. | SageMaker Training jobs, S3, CloudWatch. |
 | `06_metrics_evaluation.md` | Evaluar baseline. | `make lab-06-evaluation` | Metricas JSON y reporte Markdown. | SageMaker Processing jobs, S3, CloudWatch. |
 | `07_hyperparameter_tuning.md` | Ejecutar HPO y comparar modelos. | `make lab-07-hpo` | Tuning Job, best model y comparacion. | SageMaker HPO, Training jobs, S3. |
@@ -218,6 +234,7 @@ Archivos clave:
 | `raw/` | Dataset raw sintetico. |
 | `processing/input/` | Snapshot de features. |
 | `feature-store-offline/` | Offline Store de Feature Store. |
+| `athena/query-results/` | Resultados temporales de consultas Athena usadas para materializar Offline Store. |
 | `input/train/` | Dataset de entrenamiento. |
 | `input/validation/` | Dataset de validacion. |
 | `input/test/` | Dataset de test. |
@@ -229,6 +246,7 @@ Archivos clave:
 | `reports/` | Reportes Markdown. |
 | `model_registry_metadata/` | Contrato de features. |
 | `code/` | Codigo subido para SageMaker. |
+| `automl/output/` | Artefactos del demo opcional de Autopilot. |
 
 ## Validacion general en AWS Console
 
@@ -246,7 +264,9 @@ Durante el laboratorio vas a revisar:
 10. Amazon SageMaker > Experiments and trials.
 11. Amazon SageMaker > Inference > Model Registry.
 12. Amazon SageMaker > Pipelines.
-13. Billing and Cost Management > Cost Explorer, si esta habilitado.
+13. Amazon Athena > Query editor, para validar consultas al Offline Store cuando sea necesario.
+14. SageMaker Autopilot o AutoML, si ejecutaste el demo opcional.
+15. Billing and Cost Management > Cost Explorer, si esta habilitado.
 
 ## Como interpretar Jobs en SageMaker Studio
 
@@ -275,6 +295,8 @@ Este laboratorio crea recursos reales en AWS. Los costos principales vienen de:
 - Processing Jobs.
 - Training Jobs.
 - HPO, porque ejecuta multiples Training Jobs.
+- Athena, por las consultas al Offline Store.
+- Autopilot opcional, porque puede crear varios candidatos y jobs internos.
 - S3.
 - CloudWatch Logs.
 - SageMaker Feature Store Online Store.

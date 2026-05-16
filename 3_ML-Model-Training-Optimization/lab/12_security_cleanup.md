@@ -14,6 +14,8 @@ Este paso no construye recursos nuevos. Ejecuta limpieza de:
 | Model Registry | Eliminar model packages y `churn-model-package-group`. |
 | SageMaker Experiments | Eliminar Trials y Experiment. |
 | Feature Store | Solicitar eliminacion de `churn-customer-features`. |
+| Autopilot opcional | Detener AutoML Jobs activos si `STOP_ACTIVE_JOBS_ON_CLEANUP=true`. |
+| Athena | Eliminar resultados porque estan dentro del bucket del laboratorio. |
 | S3 | Vaciar el bucket del stack antes de eliminar CloudFormation. |
 | CloudFormation | Eliminar stack `ml-training-opt-lab`. |
 
@@ -166,9 +168,10 @@ La terminal debe mostrar mensajes de eliminacion como:
 7. Ve a Amazon SageMaker > Pipelines y confirma que `ml-training-opt-lab-pipeline` no aparece.
 8. Ve a Amazon SageMaker > Inference > Model Registry y confirma que `churn-model-package-group` no aparece.
 9. Ve a Amazon SageMaker > Experiments and trials y confirma que `ml-training-opt-lab-experiment` no aparece.
-10. Ve a Amazon SageMaker > Inference > Endpoints y confirma que no hay endpoints con prefijo del laboratorio.
-11. Ve a IAM > Roles y confirma que el rol creado por el stack ya no aparece.
-12. Revisa CloudWatch Logs si necesitas validar retencion o eliminar logs manuales.
+10. Si ejecutaste Autopilot, ve a SageMaker Autopilot o AutoML y confirma que no haya jobs activos con prefijo del laboratorio.
+11. Ve a Amazon SageMaker > Inference > Endpoints y confirma que no hay endpoints con prefijo del laboratorio.
+12. Ve a IAM > Roles y confirma que el rol creado por el stack ya no aparece.
+13. Revisa CloudWatch Logs si necesitas validar retencion o eliminar logs manuales.
 
 ## Problemas comunes y como resolverlos
 
@@ -176,6 +179,7 @@ La terminal debe mostrar mensajes de eliminacion como:
 |---|---|---|
 | Stack queda en `DELETE_FAILED` | Bucket no vacio o recurso en uso. | Abre CloudFormation > Events, revisa el recurso fallido y reejecuta cleanup. |
 | Feature Group tarda en desaparecer | Eliminacion asincrona. | Espera unos minutos y vuelve a validar. |
+| AutoML Job sigue corriendo | Se ejecuto el demo opcional de Autopilot y no termino. | Activa `STOP_ACTIVE_JOBS_ON_CLEANUP=true` antes de cleanup o detenlo desde SageMaker. |
 | `AccessDenied` al limpiar | Profile sin permisos de delete. | Revisa permisos para SageMaker, S3, CloudFormation e IAM. |
 | Hay objetos S3 restantes | Bucket externo o mismatch con `S3_BUCKET_NAME`. | Verifica que el bucket pertenece al stack antes de borrar manualmente. |
 

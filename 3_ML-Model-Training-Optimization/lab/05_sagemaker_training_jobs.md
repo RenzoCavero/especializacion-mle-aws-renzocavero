@@ -19,6 +19,18 @@ El job entrena un modelo `sklearn.linear_model.LogisticRegression` usando:
 | Train | `s3://<S3_BUCKET>/input/train/train.csv` |
 | Validation | `s3://<S3_BUCKET>/input/validation/validation.csv` |
 
+Estos archivos no se escriben manualmente. Los crea el Processing Job del paso 04 a partir del Offline Store de SageMaker Feature Store:
+
+```text
+Feature Store Offline Store
+  -> Athena materialization
+  -> Processing Job
+  -> s3://<S3_BUCKET>/input/train/train.csv
+  -> s3://<S3_BUCKET>/input/validation/validation.csv
+```
+
+Esto es la forma indirecta y recomendada de usar Feature Store para training: el Training Job recibe datasets versionables en S3, mientras el Offline Store conserva la historia de features.
+
 El artefacto queda en:
 
 ```text
@@ -31,6 +43,7 @@ s3://<S3_BUCKET>/output/baseline/<training-job>/output/model.tar.gz
 - Script Mode: forma de ejecutar un script propio dentro de una imagen administrada.
 - Model artifact: paquete `model.tar.gz` que contiene el modelo entrenado.
 - Metric definitions: expresiones que SageMaker usa para extraer metricas desde logs.
+- Offline Store indirecto: patron donde Feature Store alimenta un dataset historico mediante Processing/Athena, y el Training Job consume el resultado en S3.
 
 ## Prerrequisitos
 
@@ -139,11 +152,14 @@ El estado debe incluir:
 5. Abre el detalle del job.
 6. Revisa `Hyperparameters` y confirma `C`, `max-iter`, `class-weight` y `random-state`.
 7. Revisa `Input data configuration` y confirma canales `train` y `validation`.
-8. Revisa `Output` y copia la ruta S3 del model artifact.
-9. Revisa `Metrics` para ver las metricas capturadas.
-10. Abre CloudWatch Logs desde el detalle del job.
-11. Busca `Reporting training SUCCESS`.
-12. Ve a S3 y confirma que existe `model.tar.gz`.
+8. Abre las rutas de entrada y confirma que apuntan a:
+   - `s3://<S3_BUCKET>/input/train/train.csv`.
+   - `s3://<S3_BUCKET>/input/validation/validation.csv`.
+9. Revisa `Output` y copia la ruta S3 del model artifact.
+10. Revisa `Metrics` para ver las metricas capturadas.
+11. Abre CloudWatch Logs desde el detalle del job.
+12. Busca `Reporting training SUCCESS`.
+13. Ve a S3 y confirma que existe `model.tar.gz`.
 
 ## Diferencia con otras opciones de `Jobs`
 

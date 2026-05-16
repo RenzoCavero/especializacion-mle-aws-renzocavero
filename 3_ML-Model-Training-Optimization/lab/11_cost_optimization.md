@@ -19,6 +19,7 @@ El reporte consulta:
 | Processing Jobs | Jobs `InProgress` con prefijo del laboratorio. |
 | Training Jobs | Jobs `InProgress` con prefijo del laboratorio. |
 | HPO Jobs | Tuning Jobs `InProgress` con prefijo del laboratorio. |
+| Autopilot Jobs | AutoML Jobs `InProgress` si ejecutaste el demo opcional. |
 | Endpoints | Que no existan endpoints persistentes del laboratorio. |
 | S3 | Muestra de reportes, metricas y metadata. |
 | Guardrails | Tipos de instancia, HPO max jobs y Online Store. |
@@ -27,7 +28,9 @@ El reporte consulta:
 
 - Costo de compute: instancias usadas por Processing, Training y HPO.
 - Costo de almacenamiento: S3, Offline Store y CloudWatch Logs.
+- Costo de consulta: Athena cobra por datos escaneados al materializar Offline Store.
 - Feature Store Online Store: puede generar costo mientras exista.
+- Autopilot: puede lanzar candidatos y jobs internos, por eso se mantiene opcional.
 - Endpoint persistente: recurso que seguiria cobrando si queda activo; este laboratorio no crea endpoints.
 
 ## Prerrequisitos
@@ -92,8 +95,9 @@ El reporte debe mostrar:
 2. Revisa `active_processing_jobs`.
 3. Revisa `active_training_jobs`.
 4. Revisa `active_hpo_jobs`.
-5. Revisa `endpoints_with_lab_prefix`.
-6. Confirma que no hay endpoints inesperados.
+5. Revisa `active_autopilot_jobs`.
+6. Revisa `endpoints_with_lab_prefix`.
+7. Confirma que no hay endpoints inesperados.
 
 ## Validacion en la consola AWS
 
@@ -104,12 +108,14 @@ El reporte debe mostrar:
 5. Filtra por `ml-training-opt-lab` y confirma que no haya jobs activos inesperados.
 6. Ve a Amazon SageMaker > Training > Hyperparameter tuning jobs.
 7. Confirma que no haya Tuning Jobs activos inesperados.
-8. Ve a Amazon SageMaker > Inference > Endpoints.
-9. Confirma que no existan endpoints con prefijo `ml-training-opt-lab`.
-10. Ve a Amazon SageMaker > Feature Store y revisa si `churn-customer-features` sigue creado.
-11. Ve a Amazon S3 y revisa el tamano aproximado de los prefijos generados.
-12. Ve a CloudWatch > Log groups y revisa logs bajo `/aws/sagemaker/`.
-13. Si tienes Cost Explorer habilitado, ve a Billing and Cost Management > Cost Explorer y filtra por SageMaker, S3 y region.
+8. Si ejecutaste Autopilot, ve a SageMaker Autopilot o AutoML y confirma que no haya jobs activos.
+9. Ve a Amazon SageMaker > Inference > Endpoints.
+10. Confirma que no existan endpoints con prefijo `ml-training-opt-lab`.
+11. Ve a Amazon SageMaker > Feature Store y revisa si `churn-customer-features` sigue creado.
+12. Ve a Amazon Athena y revisa que no haya consultas corriendo.
+13. Ve a Amazon S3 y revisa el tamano aproximado de los prefijos generados.
+14. Ve a CloudWatch > Log groups y revisa logs bajo `/aws/sagemaker/`.
+15. Si tienes Cost Explorer habilitado, ve a Billing and Cost Management > Cost Explorer y filtra por SageMaker, S3, Athena y region.
 
 ## Fuentes principales de costo
 
@@ -118,6 +124,8 @@ El reporte debe mostrar:
 | Processing Jobs | Usar instancias pequenas y terminar jobs fallidos. |
 | Training Jobs | Mantener dataset pequeno y usar fallbacks de instancia. |
 | HPO | Reducir `HPO_MAX_JOBS` y `HPO_MAX_PARALLEL_JOBS`. |
+| Athena | Consultar solo columnas necesarias y mantener datasets pequenos. |
+| Autopilot opcional | Reducir `AUTOPILOT_MAX_CANDIDATES`, no usar `--wait` si solo quieres lanzar y revisar luego, detener jobs que no necesites. |
 | Feature Store Online Store | Eliminar Feature Group al finalizar. |
 | S3 | Limpiar bucket del laboratorio. |
 | CloudWatch Logs | Configurar retencion y limpiar si aplica. |

@@ -13,12 +13,12 @@ Vas a crear dos archivos locales y dos objetos S3.
 | Local | `data/local_cache/churn_raw.csv` | Dataset completo sintetico. |
 | Local | `data/sample/churn_sample.csv` | Muestra de 25 filas para inspeccion rapida. |
 | S3 | `s3://<S3_BUCKET>/raw/churn_raw.csv` | Copia raw del dataset. |
-| S3 | `s3://<S3_BUCKET>/processing/input/churn_features.csv` | Snapshot que usara SageMaker Processing. |
+| S3 | `s3://<S3_BUCKET>/processing/input/churn_features.csv` | Snapshot de respaldo para SageMaker Processing. |
 
 ## Conceptos clave
 
 - Dataset raw: datos originales generados antes de transformaciones de entrenamiento.
-- Snapshot de features: copia estable que Processing usara como entrada.
+- Snapshot de features: copia estable que Processing puede usar como fallback si el Offline Store aun no esta listo.
 - S3 prefix: ruta logica dentro del bucket, por ejemplo `raw/` o `processing/input/`.
 
 ## Prerrequisitos

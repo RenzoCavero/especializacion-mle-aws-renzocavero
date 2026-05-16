@@ -158,6 +158,39 @@ Por eso, el resultado esperado no aparece en `SageMaker Studio > Jobs > Model ev
 
 Usa `Jobs > Model evaluation` cuando crees una evaluacion administrada desde Studio o desde la API especifica de evaluacion de modelos. En este laboratorio la evaluacion es reproducible por codigo y queda versionada como artefactos en S3.
 
+## Como verlo en una UI de evaluacion
+
+Para este modelo tabular de churn, la ruta recomendada de UI es Model Registry, no `Jobs > Model evaluation`.
+
+Despues de ejecutar el paso 09:
+
+1. Abre SageMaker Studio.
+2. Ve a `Models` o `Registry`, segun tu vista de Studio.
+3. Abre `Churn Model Package Group`.
+4. Entra a la version registrada.
+5. Abre la pestana `Evaluate`.
+6. Si Studio permite agregar collaterals desde S3, elige `Add` > `S3`.
+7. Usa como ubicacion:
+
+   ```text
+   s3://<S3_BUCKET>/evaluation/baseline/
+   ```
+
+   o, para el candidato optimizado:
+
+   ```text
+   s3://<S3_BUCKET>/evaluation/optimized/
+   ```
+
+La seccion `Jobs > Model evaluation` de Studio esta orientada principalmente a evaluaciones administradas creadas desde Studio, especialmente flujos de foundation models o evaluaciones configuradas por el servicio. El Processing Job de este lab no aparece ahi porque no fue creado por ese wizard de evaluacion.
+
+Si tu objetivo es forzar visibilidad en `Jobs > Model evaluation`, tendrias que crear una evaluacion administrada compatible desde Studio. Para este lab de clasificacion tabular con `scikit-learn`, mantener la evaluacion como Processing Job tiene ventajas practicas:
+
+- el codigo de evaluacion esta versionado en `processing/evaluation_entrypoint.py`;
+- los inputs y outputs son reproducibles en S3;
+- las metricas se pueden usar en Pipelines y Model Registry;
+- no dependes de un flujo visual especifico de Studio.
+
 ## Interpretacion rapida
 
 | Metrica | Como leerla |

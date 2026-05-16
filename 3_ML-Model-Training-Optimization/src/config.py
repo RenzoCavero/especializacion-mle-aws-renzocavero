@@ -91,6 +91,13 @@ class AppConfig:
     delete_model_registry_on_cleanup: bool
     delete_pipeline_on_cleanup: bool
     delete_experiments_on_cleanup: bool
+    feature_data_source: str
+    allow_feature_snapshot_fallback: bool
+    offline_store_max_wait_seconds: int
+    offline_store_poll_seconds: int
+    autopilot_max_candidates: int
+    autopilot_max_runtime_seconds: int
+    autopilot_mode: str
 
     @property
     def raw_data_local_path(self) -> Path:
@@ -115,6 +122,10 @@ class AppConfig:
     @property
     def feature_snapshot_s3_uri(self) -> str:
         return s3_join(self.s3_bucket_name, "processing", "input", "churn_features.csv")
+
+    @property
+    def athena_query_results_s3_uri(self) -> str:
+        return s3_join(self.s3_bucket_name, "athena", "query-results") + "/"
 
     @property
     def train_s3_uri(self) -> str:
@@ -200,6 +211,13 @@ class AppConfig:
             "training_instance_type_fallbacks": list(self.training_instance_type_fallbacks),
             "hpo_max_jobs": self.hpo_max_jobs,
             "hpo_max_parallel_jobs": self.hpo_max_parallel_jobs,
+            "feature_data_source": self.feature_data_source,
+            "allow_feature_snapshot_fallback": self.allow_feature_snapshot_fallback,
+            "offline_store_max_wait_seconds": self.offline_store_max_wait_seconds,
+            "offline_store_poll_seconds": self.offline_store_poll_seconds,
+            "autopilot_max_candidates": self.autopilot_max_candidates,
+            "autopilot_max_runtime_seconds": self.autopilot_max_runtime_seconds,
+            "autopilot_mode": self.autopilot_mode,
             "wait_for_jobs": self.wait_for_jobs,
             "kms_key_arn_configured": bool(self.kms_key_arn),
         }
@@ -240,4 +258,11 @@ def get_config() -> AppConfig:
         delete_model_registry_on_cleanup=env_bool("DELETE_MODEL_REGISTRY_ON_CLEANUP", True),
         delete_pipeline_on_cleanup=env_bool("DELETE_PIPELINE_ON_CLEANUP", True),
         delete_experiments_on_cleanup=env_bool("DELETE_EXPERIMENTS_ON_CLEANUP", True),
+        feature_data_source=os.getenv("FEATURE_DATA_SOURCE", "offline_store").strip().lower(),
+        allow_feature_snapshot_fallback=env_bool("ALLOW_FEATURE_SNAPSHOT_FALLBACK", True),
+        offline_store_max_wait_seconds=env_int("OFFLINE_STORE_MAX_WAIT_SECONDS", 900),
+        offline_store_poll_seconds=env_int("OFFLINE_STORE_POLL_SECONDS", 60),
+        autopilot_max_candidates=env_int("AUTOPILOT_MAX_CANDIDATES", 3),
+        autopilot_max_runtime_seconds=env_int("AUTOPILOT_MAX_RUNTIME_SECONDS", 1800),
+        autopilot_mode=os.getenv("AUTOPILOT_MODE", "ENSEMBLING").strip().upper(),
     )

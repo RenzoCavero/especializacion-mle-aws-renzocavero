@@ -23,6 +23,7 @@ def main() -> None:
             "training_instance_type": config.training_instance_type,
             "hpo_max_jobs": config.hpo_max_jobs,
             "hpo_max_parallel_jobs": config.hpo_max_parallel_jobs,
+            "autopilot_max_candidates": config.autopilot_max_candidates,
             "online_store_enabled": config.enable_online_store,
             "offline_store_s3_uri": config.offline_store_s3_uri,
             "no_persistent_endpoints_expected": True,
@@ -42,6 +43,11 @@ def main() -> None:
             NameContains=config.resource_prefix,
             MaxResults=20,
         ).get("HyperParameterTuningJobSummaries", []),
+        "active_autopilot_jobs": sm.list_auto_ml_jobs(
+            StatusEquals="InProgress",
+            NameContains=config.resource_prefix[:11].rstrip("-"),
+            MaxResults=20,
+        ).get("AutoMLJobSummaries", []),
         "endpoints_with_lab_prefix": sm.list_endpoints(
             NameContains=config.resource_prefix,
             MaxResults=20,

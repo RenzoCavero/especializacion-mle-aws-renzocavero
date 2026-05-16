@@ -206,6 +206,27 @@ artifacts/local_outputs/run_state.json
 12. Ve a S3 > `model_registry_metadata/` y confirma `feature_contract.json`.
 13. Ve a S3 > `reports/` y confirma `training_report.md` y `model_card.md`.
 
+## Evaluacion visible en Studio
+
+El paso 09 registra `ModelMetrics` apuntando al JSON de metricas generado por los Processing Jobs de evaluacion. En la version del modelo deberias ver `Evaluate: Complete` si Studio puede leer esas metricas.
+
+Si quieres agregar collaterals de evaluacion manualmente desde la UI:
+
+1. Abre SageMaker Studio.
+2. Ve a `Models` o `Registry`.
+3. Abre `Churn Model Package Group`.
+4. Entra a la version registrada.
+5. Abre la pestana `Evaluate`.
+6. Selecciona `Add` > `S3`, si la opcion esta disponible.
+7. Usa una de estas rutas:
+
+   ```text
+   s3://<S3_BUCKET>/evaluation/baseline/
+   s3://<S3_BUCKET>/evaluation/optimized/
+   ```
+
+Esto no es lo mismo que `Jobs > Model evaluation`. Esa seccion de Studio muestra evaluaciones administradas creadas por el servicio o por el wizard de Studio. Para este modelo tabular de `scikit-learn`, la evaluacion del lab queda trazada como Processing Job, metricas en S3 y ModelMetrics en Model Registry.
+
 ## Validacion opcional por CLI
 
 ```bash

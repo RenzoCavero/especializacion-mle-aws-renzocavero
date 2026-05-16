@@ -102,12 +102,27 @@ Resources:
           - Sid: FeatureStoreGlueCatalogAccess
             Effect: Allow
             Action:
+              - glue:GetDatabase
+              - glue:GetDatabases
+              - glue:GetPartition
+              - glue:GetPartitions
               - glue:GetTable
+              - glue:GetTables
               - glue:UpdateTable
             Resource:
               - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
               - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/sagemaker_featurestore
               - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/sagemaker_featurestore/*
+          - Sid: AthenaOfflineStoreQueries
+            Effect: Allow
+            Action:
+              - athena:StartQueryExecution
+              - athena:GetQueryExecution
+              - athena:GetQueryResults
+              - athena:StopQueryExecution
+              - athena:GetWorkGroup
+              - athena:ListWorkGroups
+            Resource: "*"
           - Sid: CloudWatchLogs
             Effect: Allow
             Action:
@@ -141,6 +156,12 @@ Resources:
               - sagemaker:DescribeHyperParameterTuningJob
               - sagemaker:StopHyperParameterTuningJob
               - sagemaker:ListHyperParameterTuningJobs
+              - sagemaker:CreateAutoMLJob
+              - sagemaker:CreateAutoMLJobV2
+              - sagemaker:DescribeAutoMLJob
+              - sagemaker:DescribeAutoMLJobV2
+              - sagemaker:StopAutoMLJob
+              - sagemaker:ListAutoMLJobs
               - sagemaker:CreateFeatureGroup
               - sagemaker:DescribeFeatureGroup
               - sagemaker:DeleteFeatureGroup

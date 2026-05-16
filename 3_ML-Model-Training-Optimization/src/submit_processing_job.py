@@ -69,6 +69,18 @@ def main() -> None:
         "arguments": [
             "--input-data",
             "/opt/ml/processing/input",
+            "--feature-source",
+            config.feature_data_source,
+            "--feature-group-name",
+            config.feature_group_name,
+            "--aws-region",
+            config.aws_region,
+            "--athena-output-s3-uri",
+            config.athena_query_results_s3_uri,
+            "--offline-store-max-wait-seconds",
+            str(config.offline_store_max_wait_seconds),
+            "--offline-store-poll-seconds",
+            str(config.offline_store_poll_seconds),
             "--train-output",
             "/opt/ml/processing/output/train",
             "--validation-output",
@@ -77,7 +89,8 @@ def main() -> None:
             "/opt/ml/processing/output/test",
             "--metadata-output",
             "/opt/ml/processing/output/metadata",
-        ],
+        ]
+        + (["--allow-snapshot-fallback"] if config.allow_feature_snapshot_fallback else []),
         "wait": config.wait_for_jobs,
         "logs": True,
     }
@@ -130,6 +143,9 @@ def main() -> None:
         preprocessing_metadata_s3_uri=preprocessing_metadata_s3_uri,
         preprocessing_metadata_local_path=str(local_metadata_path),
         processing_instance_type=selected_instance_type,
+        feature_data_source=config.feature_data_source,
+        athena_query_results_s3_uri=config.athena_query_results_s3_uri,
+        offline_store_dataset_source=config.offline_store_s3_uri,
     )
     LOGGER.info("Processing Job submitted: %s on %s", job_name, selected_instance_type)
 

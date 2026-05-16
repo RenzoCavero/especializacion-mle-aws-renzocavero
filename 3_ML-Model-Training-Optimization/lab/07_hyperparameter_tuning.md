@@ -44,21 +44,25 @@ s3://<S3_BUCKET>/input/train/train.csv
 s3://<S3_BUCKET>/input/validation/validation.csv
 ```
 
-Esos archivos fueron creados por el Processing Job del paso 04 a partir del snapshot:
+Esos archivos fueron creados por el Processing Job del paso 04 a partir del Offline Store:
+
+```text
+Feature Store Offline Store
+  -> AWS Glue Data Catalog
+  -> Amazon Athena
+  -> SageMaker Processing Job
+  -> train.csv + validation.csv + test.csv in S3
+```
+
+El snapshot CSV queda disponible como fallback bajo:
 
 ```text
 s3://<S3_BUCKET>/processing/input/churn_features.csv
 ```
 
-El Offline Store queda disponible bajo:
+pero no es la fuente principal cuando `FEATURE_DATA_SOURCE=offline_store`.
 
-```text
-s3://<S3_BUCKET>/feature-store-offline/
-```
-
-pero no es la fuente directa usada por HPO en este laboratorio.
-
-En una arquitectura mas productiva, podrias cambiar el flujo para que Processing lea desde el Offline Store usando S3, AWS Glue Data Catalog o Amazon Athena. Processing construiria el dataset historico, aplicaria transformaciones y escribiria `train.csv` y `validation.csv` en S3. Despues HPO seguiria entrenando desde esos archivos de S3:
+La idea clave es que HPO usa el Offline Store indirectamente. Processing construye el dataset historico, aplica transformaciones y escribe `train.csv` y `validation.csv` en S3. Despues HPO entrena desde esos archivos:
 
 ```text
 Offline Store -> Processing/Athena -> train.csv + validation.csv -> HPO
@@ -211,12 +215,72 @@ Es valido que el baseline gane en test aunque HPO haya encontrado un mejor model
 
 HPO ejecuta multiples Training Jobs. Cada trial consume instancia de SageMaker. Mantener `HPO_MAX_JOBS` bajo es intencional para controlar costo en cuentas de estudiantes.
 
+## Opcional: comparar con SageMaker Autopilot
+
+SageMaker Autopilot, tambien llamado AutoML, automatiza parte del ciclo de modelado: analiza un dataset tabular, genera candidatos, entrena modelos y produce un ranking de candidatos. No reemplaza necesariamente al pipeline MLOps, pero sirve como benchmark rapido o como exploracion inicial.
+
+En este repositorio hay un comando opcional. No forma parte de `bash scripts/lab.sh all` para evitar costos extra.
+
+Con Bash o Git Bash:
+
+```bash
+bash scripts/run_autopilot.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\run_autopilot.ps1
+```
+
+Con Python:
+
+```bash
+python -m src.submit_autopilot_job
+```
+
+Si quieres que el script espere hasta que termine:
+
+```bash
+python -m src.submit_autopilot_job --wait
+```
+
+El script crea un AutoML Job V2 usando:
+
+| Configuracion | Valor |
+|---|---|
+| Fuente training | `s3://<S3_BUCKET>/input/train/` |
+| Fuente validation | `s3://<S3_BUCKET>/input/validation/` |
+| Target | `churn_label` |
+| Problema | `BinaryClassification` |
+| Objetivo | `F1` |
+| Modo | `AUTOPILOT_MODE`, default `ENSEMBLING` |
+| Max candidatos | `AUTOPILOT_MAX_CANDIDATES`, default `3` |
+| Output | `s3://<S3_BUCKET>/automl/output/` |
+
+Validacion visual:
+
+1. Abre Amazon SageMaker AI.
+2. Ve a AutoML o Autopilot, segun la vista disponible en tu consola.
+3. Busca el job con nombre similar a `ml-training-automl-<timestamp>`.
+4. Revisa estado, candidatos generados y best candidate.
+5. Revisa S3 > `<S3_BUCKET>` > `automl/output/`.
+
+Usalo como comparacion educativa:
+
+```text
+Baseline propio -> HPO propio -> Autopilot opcional
+```
+
+En produccion, si Autopilot encuentra un enfoque prometedor, revisa su candidate definition, replica lo necesario como codigo controlado y registralo con los mismos gates de evaluacion y gobierno.
+
 ## Problemas comunes y como resolverlos
 
 | Problema | Causa probable | Solucion |
 |---|---|---|
 | `ResourceLimitExceeded` | Sin cuota para la instancia de training. | Ajusta `TRAINING_INSTANCE_TYPE_FALLBACKS` o solicita cuota. |
 | HPO tarda mas que training baseline | Ejecuta varios jobs. | Espera a que termine o baja `HPO_MAX_JOBS`. |
+| Autopilot tarda mas de lo esperado | AutoML crea candidatos y puede ejecutar entrenamiento adicional. | Mantén `AUTOPILOT_MAX_CANDIDATES` bajo o deten el job desde SageMaker si no lo necesitas. |
 | `Baseline metrics missing` al comparar | No se ejecuto paso 06. | Ejecuta `python -m src.evaluate_model --model-name baseline`. |
 | `Optimized metrics missing` | No se evaluo el mejor modelo. | Ejecuta `python -m src.evaluate_model --model-name optimized`. |
 | Solo ves Training Jobs en SageMaker Studio | Studio muestra los trials hijos. | Abre Amazon SageMaker AI > Hyperparameter tuning jobs para ver el tuning job padre. |

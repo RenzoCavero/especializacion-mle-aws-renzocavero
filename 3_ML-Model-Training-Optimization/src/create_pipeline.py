@@ -36,6 +36,11 @@ def main() -> None:
     training_instance_type = state.get("baseline_training_instance_type", config.training_instance_type)
 
     input_data = ParameterString(name="InputDataS3Uri", default_value=config.feature_snapshot_s3_uri)
+    feature_source = ParameterString(name="FeatureSource", default_value=config.feature_data_source)
+    athena_output_s3_uri = ParameterString(
+        name="AthenaOutputS3Uri",
+        default_value=config.athena_query_results_s3_uri,
+    )
     model_approval_status = ParameterString(name="ModelApprovalStatus", default_value="PendingManualApproval")
     min_f1 = ParameterFloat(name="MinF1ForRegistration", default_value=0.50)
 
@@ -71,6 +76,21 @@ def main() -> None:
                 destination=s3_join(config.s3_bucket_name, "processing", "pipeline", "metadata"),
             ),
         ],
+        arguments=[
+            "--feature-source",
+            feature_source,
+            "--feature-group-name",
+            config.feature_group_name,
+            "--aws-region",
+            config.aws_region,
+            "--athena-output-s3-uri",
+            athena_output_s3_uri,
+            "--offline-store-max-wait-seconds",
+            str(config.offline_store_max_wait_seconds),
+            "--offline-store-poll-seconds",
+            str(config.offline_store_poll_seconds),
+        ]
+        + (["--allow-snapshot-fallback"] if config.allow_feature_snapshot_fallback else []),
         wait=False,
     )
     step_process = ProcessingStep(name="ProcessChurnFeatures", step_args=processing_args)
@@ -179,7 +199,7 @@ def main() -> None:
 
     pipeline = Pipeline(
         name=config.pipeline_name,
-        parameters=[input_data, model_approval_status, min_f1],
+        parameters=[input_data, feature_source, athena_output_s3_uri, model_approval_status, min_f1],
         steps=[step_process, step_train, step_eval, step_condition],
         sagemaker_session=session,
     )

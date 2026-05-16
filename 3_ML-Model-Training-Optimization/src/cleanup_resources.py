@@ -140,6 +140,12 @@ def stop_active_jobs(config) -> None:
     ):
         sm.stop_hyper_parameter_tuning_job(HyperParameterTuningJobName=job["HyperParameterTuningJobName"])
         LOGGER.info("Stopped HPO Job %s", job["HyperParameterTuningJobName"])
+    for job in sm.list_auto_ml_jobs(
+        StatusEquals="InProgress",
+        NameContains=config.resource_prefix[:11].rstrip("-"),
+    ).get("AutoMLJobSummaries", []):
+        sm.stop_auto_ml_job(AutoMLJobName=job["AutoMLJobName"])
+        LOGGER.info("Stopped Autopilot Job %s", job["AutoMLJobName"])
 
 
 def main() -> None:

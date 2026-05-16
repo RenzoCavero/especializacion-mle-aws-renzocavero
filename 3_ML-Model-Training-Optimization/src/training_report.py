@@ -29,6 +29,7 @@ def main() -> None:
         f"- Environment: {config.environment}",
         f"- Feature Group: {config.feature_group_name}",
         f"- Offline Store: {config.offline_store_s3_uri}",
+        f"- Processing feature source: {state.get('feature_data_source', config.feature_data_source)}",
         f"- Processing Job: {state.get('processing_job_name')}",
         f"- Baseline Training Job: {state.get('baseline_training_job_name')}",
         f"- HPO Job: {state.get('hpo_job_name')}",

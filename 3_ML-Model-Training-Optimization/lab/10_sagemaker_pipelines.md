@@ -53,7 +53,8 @@ El Pipeline agrega dependencias, parametros y registro condicional.
 
 Hay diferencias importantes:
 
-1. El Pipeline no ejecuta HPO. Usa un baseline con:
+1. El Pipeline usa el mismo entrypoint del paso 04, por lo que puede materializar datos desde el Offline Store via Athena cuando `FeatureSource=offline_store`.
+2. El Pipeline no ejecuta HPO. Usa un baseline con:
 
    ```text
    C=1.0
@@ -62,9 +63,9 @@ Hay diferencias importantes:
    random-state=42
    ```
 
-2. El Pipeline registra el modelo con `RegisterModel` si la condicion de F1 se cumple.
-3. El paso 09 standalone agrega metadata adicional, contrato de features, `training_report.md` y `model_card.md`.
-4. Si quieres que el Pipeline incluya HPO, comparacion de modelos o reportes custom, tendrias que agregar steps adicionales.
+3. El Pipeline registra el modelo con `RegisterModel` si la condicion de F1 se cumple.
+4. El paso 09 standalone agrega metadata adicional, contrato de features, `training_report.md` y `model_card.md`.
+5. Si quieres que el Pipeline incluya HPO, comparacion de modelos o reportes custom, tendrias que agregar steps adicionales.
 
 ## Diseno realista con HPO y seleccion de modelo
 
@@ -255,15 +256,23 @@ Nota importante: si usas features con timestamps, el join debe ser point-in-time
    cd 3_ML-Model-Training-Optimization
    ```
 
-2. Completa al menos los pasos 01, 02 y 04.
+2. Completa al menos los pasos 01, 02, 03 y 04.
 
-3. Confirma que existe:
+3. Confirma que existe el Offline Store y la tabla Glue del Feature Group.
+
+4. Confirma que existe el snapshot de fallback:
 
    ```text
    s3://<S3_BUCKET>/processing/input/churn_features.csv
    ```
 
-4. Confirma que el Model Package Group existe o que tienes permisos para crearlo cuando el pipeline registre.
+5. Confirma que el Model Package Group existe o que tienes permisos para crearlo cuando el pipeline registre.
+
+6. Si ves errores de permisos con Athena o AddTags, actualiza infraestructura:
+
+   ```bash
+   bash scripts/lab.sh step 01
+   ```
 
 ## Pasos de ejecucion
 
@@ -331,7 +340,9 @@ Parametros del Pipeline:
 
 | Parametro | Default |
 |---|---|
-| `InputDataS3Uri` | `s3://<S3_BUCKET>/processing/input/churn_features.csv` |
+| `InputDataS3Uri` | `s3://<S3_BUCKET>/processing/input/churn_features.csv`, usado como fallback. |
+| `FeatureSource` | `offline_store` |
+| `AthenaOutputS3Uri` | `s3://<S3_BUCKET>/athena/query-results/` |
 | `ModelApprovalStatus` | `PendingManualApproval` |
 | `MinF1ForRegistration` | `0.50` |
 
@@ -372,6 +383,8 @@ s3://<S3_BUCKET>/reports/pipeline/
 | Se crea un Processing Job al crear pipeline | Se uso `SageMaker Session` normal en lugar de `PipelineSession`. | El codigo actual usa `pipeline_session`; verifica que estas ejecutando `src.create_pipeline` actualizado. |
 | Error `ParameterString is not JSON serializable` | Version anterior intentaba serializar parametros en una llamada no compatible. | Usa la version actual del codigo; valida que `create_pipeline.py` usa `PipelineSession`. |
 | `not authorized to perform: sagemaker:AddTags` en `CreateProcessingJob` | El rol de ejecucion de SageMaker no tiene permiso para etiquetar jobs creados por el Pipeline. SageMaker Pipelines agrega tags automaticamente a los jobs de cada step. | Actualiza la infraestructura con `python -m src.deploy_infra` o `bash scripts/lab.sh step 01` para aplicar la politica IAM que incluye `sagemaker:AddTags`; luego ejecuta de nuevo `python -m src.run_pipeline`. |
+| `not authorized to perform: athena:StartQueryExecution` | El Pipeline usa el Offline Store via Athena y el rol no fue actualizado. | Ejecuta `bash scripts/lab.sh step 01` para actualizar el rol con permisos de Athena. |
+| `ProcessChurnFeatures` espera o cae a fallback | Offline Store escribe asincronicamente o la tabla Glue aun no tiene filas. | Espera unos minutos. Si `ALLOW_FEATURE_SNAPSHOT_FALLBACK=true`, revisa metadata para confirmar si uso fallback. |
 | Pipeline falla en step de training | Datos procesados ausentes o permisos insuficientes. | Abre el step, luego el Training Job y CloudWatch Logs. |
 | No se registra el modelo | F1 no supera `MinF1ForRegistration`. | Revisa `EvaluateChurnModel` y el Condition Step. |
 

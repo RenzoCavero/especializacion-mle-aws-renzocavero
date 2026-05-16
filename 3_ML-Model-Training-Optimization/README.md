@@ -8,9 +8,11 @@ El flujo usa:
 
 - Amazon S3 para datos, codigo, metricas, reportes y artefactos.
 - SageMaker Feature Store con Online Store y Offline Store.
+- Amazon Athena y AWS Glue Data Catalog para materializar datasets desde Offline Store.
 - SageMaker Processing Jobs para preparacion y evaluacion reproducibles.
 - SageMaker Training Jobs para baseline training.
 - SageMaker Automatic Model Tuning para HPO.
+- SageMaker Autopilot como comparacion AutoML opcional.
 - SageMaker Experiments para tracking.
 - SageMaker Model Registry para registrar el mejor modelo.
 - SageMaker Pipelines como base process/train/evaluate/register.
@@ -71,9 +73,11 @@ scripts\run_all_cloud.ps1
 
 `make all-cloud` despliega infraestructura, genera datos sinteticos, crea Feature Store, ingiere features, prepara datasets con Processing Job, entrena baseline, ejecuta HPO, evalua, compara, registra el modelo, exporta contrato de features, genera reportes y valida recursos.
 
+El Processing Job prepara `train.csv`, `validation.csv` y `test.csv` desde el Offline Store mediante AWS Glue Data Catalog y Amazon Athena. El snapshot `processing/input/churn_features.csv` queda como fallback configurable para cuentas donde el Offline Store aun no haya escrito filas.
+
 ## Ejecutar por pasos para clase
 
-Usa estos comandos para ensenar el laboratorio en paralelo con el PDF:
+Usa estos comandos para ejecutar el laboratorio por etapas:
 
 ```bash
 make lab-00-context
@@ -89,6 +93,13 @@ make lab-09-model-registry
 make lab-10-pipeline
 make lab-11-cost
 make lab-13-next-labs
+```
+
+Demo opcional de Autopilot despues del paso 04:
+
+```bash
+make autopilot
+bash scripts/run_autopilot.sh
 ```
 
 Equivalentes con Python:
@@ -183,6 +194,7 @@ Prefijos importantes:
 
 - `raw/`
 - `feature-store-offline/`
+- `athena/query-results/`
 - `input/train/`
 - `input/validation/`
 - `input/test/`
@@ -193,6 +205,7 @@ Prefijos importantes:
 - `metrics/`
 - `reports/`
 - `model_registry_metadata/`
+- `automl/output/`
 
 ## Revisar logs en CloudWatch
 
@@ -256,6 +269,8 @@ El cleanup elimina Feature Group, Pipeline, Model Registry, Experiments y objeto
 - Offline Store persiste datos en S3.
 - Processing, Training y HPO usan instancias SageMaker.
 - HPO ejecuta multiples Training Jobs.
+- Athena cobra por datos escaneados en consultas al Offline Store.
+- Autopilot opcional puede crear candidatos y jobs adicionales.
 - CloudWatch Logs y S3 acumulan almacenamiento.
 
 Usa datasets pequenos, HPO limitado y cleanup al terminar.

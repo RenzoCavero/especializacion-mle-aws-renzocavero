@@ -24,7 +24,7 @@ class LabStep:
 
 
 STEPS: tuple[LabStep, ...] = (
-    LabStep("00", "context", "Contexto de negocio y formulacion ML", (("message", "Lee lab/00_contexto_negocio.md y el PDF antes de crear recursos."),)),
+    LabStep("00", "context", "Contexto de negocio y formulacion ML", (("message", "Lee lab/00_contexto_negocio.md antes de crear recursos."),)),
     LabStep("01", "aws-setup", "Configuracion AWS, IAM e infraestructura base", (("src.deploy_infra",),)),
     LabStep("02", "training-data", "Datos de entrenamiento en Amazon S3", (("src.generate_sample_data",), ("src.upload_raw_data",))),
     LabStep(
