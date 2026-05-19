@@ -14,7 +14,15 @@ Ejemplos:
 Comando:
 
 ```bash
+bash scripts/lab.sh step 06
 make features
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 step 06
+.\scripts\run_processing_job.ps1 -Steps features
 ```
 
 Outputs:
@@ -80,6 +88,27 @@ genera:
 ```text
 s3://<bucket>/inference/inference_dataset.csv
 ```
+
+## Rutas De Ejecucion
+
+| Nivel | Ruta |
+|---|---|
+| Runner numerado | `scripts/lab.sh step 06` o `scripts/lab.ps1 step 06` |
+| Script directo | `scripts/run_processing_job.sh features` o `scripts/run_processing_job.ps1 -Steps features` |
+| Modulo que envia el Glue Job | `src.run_processing_job` |
+| Codigo remoto | `s3://<bucket>/scripts/glue_pipeline.py` |
+| Logica de features | `src.feature_engineering` |
+| Esquema de columnas | `src.schemas.FEATURE_COLUMNS`, `src.schemas.TRAINING_COLUMNS`, `src.schemas.INFERENCE_COLUMNS` |
+
+## Validacion En AWS Console
+
+1. Abre AWS Glue > ETL jobs.
+2. Abre `ml-data-prep-lab-processing-job`.
+3. Confirma que el ultimo run termino en `Succeeded`.
+4. Abre Amazon S3 y entra al bucket del laboratorio.
+5. Revisa `features/training_features.csv` y `features/inference_features.csv`.
+6. Si ejecutaste tambien los pasos de datasets, revisa `features/training_dataset.csv` e `inference/inference_dataset.csv`.
+7. Opcionalmente abre Athena y consulta la tabla `features_training` despues de ejecutar `python -m src.register_catalog`.
 
 ## Relacion Con SageMaker Feature Store
 

@@ -24,14 +24,24 @@ class LabStep:
 
 
 STEPS: tuple[LabStep, ...] = (
-    LabStep("00", "context", "Contexto de negocio y formulacion ML", (("message", "Lee lab/00_contexto_negocio.md y el PDF antes de crear recursos."),)),
+    LabStep("00", "context", "Contexto de negocio y formulacion ML", (("message", "Lee lab/00_contexto_negocio.md antes de crear recursos."),)),
     LabStep("01", "aws-setup", "Configuracion AWS, IAM e infraestructura base", (("src.deploy_infra",),)),
-    LabStep("02", "training-data", "Datos de entrenamiento en Amazon S3", (("src.generate_sample_data",), ("src.upload_raw_data",))),
+    LabStep(
+        "02",
+        "training-data",
+        "Datos de entrenamiento en Amazon S3",
+        (("src.generate_sample_data",), ("src.upload_raw_data",), ("src.prepare_feature_sources",)),
+    ),
     LabStep(
         "03",
         "feature-store",
         "SageMaker Feature Store",
-        (("src.create_feature_group",), ("src.ingest_features",), ("src.get_online_features",), ("src.query_offline_store",)),
+        (
+            ("src.create_feature_group",),
+            ("src.submit_feature_ingestion_job",),
+            ("src.get_online_features",),
+            ("src.query_offline_store",),
+        ),
     ),
     LabStep("04", "processing", "SageMaker Processing Jobs", (("src.submit_processing_job",),)),
     LabStep("05", "training", "SageMaker Training Jobs", (("src.submit_training_job",),)),

@@ -44,21 +44,25 @@ s3://<S3_BUCKET>/input/train/train.csv
 s3://<S3_BUCKET>/input/validation/validation.csv
 ```
 
-Esos archivos fueron creados por el Processing Job del paso 04 a partir del snapshot:
+Esos archivos fueron creados por el Processing Job del paso 04 a partir del Offline Store:
+
+```text
+Feature Store Offline Store
+  -> AWS Glue Data Catalog
+  -> Amazon Athena
+  -> SageMaker Processing Job
+  -> train.csv + validation.csv + test.csv in S3
+```
+
+El snapshot CSV queda disponible como fallback bajo:
 
 ```text
 s3://<S3_BUCKET>/processing/input/churn_features.csv
 ```
 
-El Offline Store queda disponible bajo:
+pero no es la fuente principal cuando `FEATURE_DATA_SOURCE=offline_store`.
 
-```text
-s3://<S3_BUCKET>/feature-store-offline/
-```
-
-pero no es la fuente directa usada por HPO en este laboratorio.
-
-En una arquitectura mas productiva, podrias cambiar el flujo para que Processing lea desde el Offline Store usando S3, AWS Glue Data Catalog o Amazon Athena. Processing construiria el dataset historico, aplicaria transformaciones y escribiria `train.csv` y `validation.csv` en S3. Despues HPO seguiria entrenando desde esos archivos de S3:
+La idea clave es que HPO usa el Offline Store indirectamente. Processing construye el dataset historico, aplica transformaciones y escribe `train.csv` y `validation.csv` en S3. Despues HPO entrena desde esos archivos:
 
 ```text
 Offline Store -> Processing/Athena -> train.csv + validation.csv -> HPO
@@ -129,6 +133,20 @@ Rutas importantes:
 | Modulo que evalua el modelo optimizado | `src/evaluate_model.py` |
 | Codigo remoto usado para evaluacion | `processing/evaluation_entrypoint.py` |
 | Modulo local que compara baseline vs optimized | `src/compare_models.py` |
+
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar rangos de HPO standalone | `src/submit_hpo_job.py` |
+| Cambiar rangos de HPO dentro del Pipeline opcional | `src/create_hpo_pipeline.py` |
+| Cambiar cantidad de trials o paralelismo | `.env`, `.env.example`, `src/config.py` (`HPO_MAX_JOBS`, `HPO_MAX_PARALLEL_JOBS`) |
+| Cambiar metrica objetivo | `src/submit_hpo_job.py`, `src/create_hpo_pipeline.py`, `training/train.py`, `src/submit_training_job.py` |
+| Cambiar algoritmo entrenado por cada trial | `training/train.py` |
+| Cambiar criterio de comparacion baseline vs optimized | `src/compare_models.py` |
+| Cambiar evaluacion del modelo optimizado | `src/evaluate_model.py`, `processing/evaluation_entrypoint.py` |
+| Cambiar demo opcional de Autopilot | `src/submit_autopilot_job.py`, `.env` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
 
 ## Resultado esperado
 
@@ -211,12 +229,110 @@ Es valido que el baseline gane en test aunque HPO haya encontrado un mejor model
 
 HPO ejecuta multiples Training Jobs. Cada trial consume instancia de SageMaker. Mantener `HPO_MAX_JOBS` bajo es intencional para controlar costo en cuentas de estudiantes.
 
+## Opcional: demo minima con SageMaker Autopilot
+
+SageMaker Autopilot, tambien llamado AutoML, automatiza parte del ciclo de modelado: analiza un dataset tabular, genera candidatos, entrena modelos y produce un ranking de candidatos. No reemplaza necesariamente al pipeline MLOps, pero sirve como benchmark rapido o como exploracion inicial.
+
+En este repositorio hay un comando opcional. No forma parte de `bash scripts/lab.sh all` para evitar costos extra.
+
+La configuracion default es intencionalmente pequena. El objetivo no es encontrar el mejor modelo con AutoML, sino que veas donde aparece el job, como se ve el leaderboard de candidatos y que artefactos genera SageMaker.
+
+Con Bash o Git Bash:
+
+```bash
+bash scripts/run_autopilot.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\run_autopilot.ps1
+```
+
+Con Python:
+
+```bash
+python -m src.submit_autopilot_job
+```
+
+Si quieres que el script espere hasta que termine:
+
+```bash
+python -m src.submit_autopilot_job --wait
+```
+
+El script crea un AutoML Job V2 usando:
+
+| Configuracion | Valor |
+|---|---|
+| Fuente training | `s3://<S3_BUCKET>/input/train/` |
+| Fuente validation | `s3://<S3_BUCKET>/input/validation/` |
+| Target | `churn_label` |
+| Problema | `BinaryClassification` |
+| Objetivo | `F1` |
+| Modo | `AUTOPILOT_MODE`, default `ENSEMBLING` |
+| Algoritmos | `AUTOPILOT_ALGORITHMS`, default `linear-learner,xgboost` |
+| Max candidatos | `AUTOPILOT_MAX_CANDIDATES`, default `2` |
+| Runtime maximo del job | `AUTOPILOT_MAX_RUNTIME_SECONDS`, default `900` segundos |
+| Output | `s3://<S3_BUCKET>/automl/output/` |
+
+La seleccion `linear-learner,xgboost` limita Autopilot a dos familias de algoritmos tabulares comunes. Segun la API de SageMaker, Autopilot permite seleccionar un subconjunto de algoritmos mediante `CandidateGenerationConfig.AlgorithmsConfig`. En modo `ENSEMBLING`, algoritmos como `linear-learner` y `xgboost` son validos para tabular.
+
+Si cambias `AUTOPILOT_MODE=AUTO`, el script omite la seleccion manual de algoritmos y deja que SageMaker decida el modo y los candidatos.
+
+Validacion visual:
+
+1. Abre Amazon SageMaker AI.
+2. Ve a AutoML o Autopilot, segun la vista disponible en tu consola.
+3. Busca el job con nombre similar a `ml-training-automl-<timestamp>`.
+4. Revisa `Status`.
+5. Abre el job y revisa el candidate leaderboard.
+6. Revisa los algoritmos o candidate definitions generados.
+7. Si el job termino, revisa `Best candidate`.
+8. Revisa S3 > `<S3_BUCKET>` > `automl/output/`.
+
+Tambien puedes validar por CLI:
+
+```bash
+aws sagemaker list-auto-ml-jobs \
+  --region <AWS_REGION> \
+  --sort-by CreationTime \
+  --sort-order Descending
+```
+
+Y describir el job:
+
+```bash
+aws sagemaker describe-auto-ml-job-v2 \
+  --auto-ml-job-name <AUTOPILOT_JOB_NAME> \
+  --region <AWS_REGION>
+```
+
+Que puedes hacer con el resultado:
+
+| Accion | Para que sirve |
+|---|---|
+| Ver leaderboard | Entender que candidatos probo Autopilot y como se comparan. |
+| Revisar best candidate | Inspeccionar el candidato que mejor optimizo `F1`. |
+| Revisar artefactos en S3 | Ver salidas y metadata generadas por AutoML. |
+| Crear modelo desde la UI | Probar como SageMaker convierte un candidato en un modelo desplegable. |
+| Replicar manualmente | Tomar una idea prometedora y llevarla a codigo controlado dentro del pipeline MLOps. |
+
+Usalo como comparacion educativa:
+
+```text
+Baseline propio -> HPO propio -> Autopilot opcional
+```
+
+En produccion, no despliegues automaticamente el resultado de Autopilot solo porque obtuvo buen score. Si encuentra un enfoque prometedor, revisa su candidate definition, replica lo necesario como codigo controlado y registralo con los mismos gates de evaluacion, seguridad y gobierno.
+
 ## Problemas comunes y como resolverlos
 
 | Problema | Causa probable | Solucion |
 |---|---|---|
 | `ResourceLimitExceeded` | Sin cuota para la instancia de training. | Ajusta `TRAINING_INSTANCE_TYPE_FALLBACKS` o solicita cuota. |
 | HPO tarda mas que training baseline | Ejecuta varios jobs. | Espera a que termine o baja `HPO_MAX_JOBS`. |
+| Autopilot tarda mas de lo esperado | AutoML crea candidatos y puede ejecutar entrenamiento adicional. | Mantén `AUTOPILOT_MAX_CANDIDATES` bajo o deten el job desde SageMaker si no lo necesitas. |
 | `Baseline metrics missing` al comparar | No se ejecuto paso 06. | Ejecuta `python -m src.evaluate_model --model-name baseline`. |
 | `Optimized metrics missing` | No se evaluo el mejor modelo. | Ejecuta `python -m src.evaluate_model --model-name optimized`. |
 | Solo ves Training Jobs en SageMaker Studio | Studio muestra los trials hijos. | Abre Amazon SageMaker AI > Hyperparameter tuning jobs para ver el tuning job padre. |

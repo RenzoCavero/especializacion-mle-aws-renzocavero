@@ -74,6 +74,16 @@ Rutas importantes:
 | Helper que crea Experiment y Trials durante pasos previos | `src/experiments.py` |
 | Archivo local generado | `artifacts/local_outputs/experiment_tracking_report.json` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar como se listan Experiments y Trials | `src/show_experiment_tracking.py` |
+| Cambiar nombres de Experiment o Trial usados por jobs | `src/experiments.py`, `src/config.py` |
+| Cambiar que jobs quedan en `run_state.json` | Submitters de cada paso y `src/state.py` |
+| Cambiar reporte local de tracking | `src/show_experiment_tracking.py` |
+| Ver diferencia entre SageMaker Experiments API y MLflow UI | `lab/08_experiments_tracking.md` y `lab/14_workflow_and_scripts_reference.md` |
+
 ## Resultado esperado
 
 Archivo local:

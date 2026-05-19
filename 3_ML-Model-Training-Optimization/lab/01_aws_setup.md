@@ -14,7 +14,7 @@ Vas a desplegar el stack CloudFormation `ml-training-opt-lab`. El stack crea:
 |---|---|---|
 | Bucket S3 | generado por CloudFormation o definido en `S3_BUCKET_NAME` | Datos, codigo, modelos, metricas y reportes. |
 | IAM Role | `SageMakerExecutionRole` dentro del stack | Rol usado por Processing Jobs, Training Jobs, HPO, Pipelines y Model Registry. |
-| IAM Policy | `LabSageMakerExecutionPolicy` | Permisos sobre S3, SageMaker, Glue, CloudWatch Logs y ECR. |
+| IAM Policy | `LabSageMakerExecutionPolicy` | Permisos sobre S3, SageMaker, Glue, Athena, CloudWatch Logs y ECR. |
 | CloudWatch Log Group | `/<RESOURCE_PREFIX>/sagemaker-lab` | Log group propio con retencion limitada. |
 
 Los jobs de SageMaker tambien escribiran logs en grupos administrados por AWS como `/aws/sagemaker/ProcessingJobs` y `/aws/sagemaker/TrainingJobs`.
@@ -23,6 +23,7 @@ Los jobs de SageMaker tambien escribiran logs en grupos administrados por AWS co
 
 - AWS CloudFormation: servicio de infraestructura como codigo.
 - IAM Role: identidad que SageMaker asume para acceder a S3, CloudWatch y otros servicios.
+- Athena: servicio usado por el Processing Job para consultar el Offline Store registrado en Glue.
 - `iam:PassRole`: permiso que permite entregar el rol de ejecucion a SageMaker.
 - `.env`: archivo local editable con configuracion del estudiante.
 - `.env.cloud`: archivo generado con outputs reales del stack. No debes commitearlo.
@@ -120,6 +121,17 @@ Rutas importantes:
 | Modulo que escribe outputs locales | `src/fetch_stack_outputs.py` |
 | Template CloudFormation enviado a AWS | `infra/cloudformation/template.yaml` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo a modificar | Comentario |
+|---|---|---|
+| Cambiar permisos IAM del rol de SageMaker | `infra/cloudformation/template.yaml` | Agrega acciones bajo `SageMakerExecutionPolicy` solo si el laboratorio las requiere. |
+| Cambiar bucket, region, prefijo o stack | `.env`, `.env.example`, `src/config.py` | `.env` controla la ejecucion local; `src/config.py` define defaults. |
+| Cambiar como se despliega infraestructura | `src/deploy_infra.py` | Usa boto3/CloudFormation y escribe outputs al final. |
+| Cambiar como se escribe `.env.cloud` | `src/fetch_stack_outputs.py` | Lee outputs del stack y genera variables locales. |
+| Cambiar wrappers de terminal | `scripts/deploy_infra.sh`, `scripts/deploy_infra.ps1` | Utiles si necesitas adaptar Git Bash o PowerShell. |
+| Ver relacion con otros pasos | `lab/14_workflow_and_scripts_reference.md` | Mapa completo del workflow. |
+
 ## Resultado esperado
 
 Archivos locales generados:
@@ -161,7 +173,8 @@ Infrastructure ready. Bucket: <S3_BUCKET>
 8. En `Properties`, confirma cifrado por defecto con SSE-S3.
 9. Ve a IAM > Roles y busca el rol creado por el stack.
 10. Abre `Trust relationships` y confirma que `sagemaker.amazonaws.com` puede asumir el rol.
-11. Ve a CloudWatch > Log groups y busca `/<RESOURCE_PREFIX>/sagemaker-lab`.
+11. En `Permissions`, confirma que la politica incluye acciones como `athena:StartQueryExecution`, `glue:GetTable`, `sagemaker:AddTags` y permisos de S3 sobre el bucket del laboratorio.
+12. Ve a CloudWatch > Log groups y busca `/<RESOURCE_PREFIX>/sagemaker-lab`.
 
 ## Problemas comunes y como resolverlos
 

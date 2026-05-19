@@ -20,6 +20,7 @@ El contrato conecta:
 - Feature Group.
 - Online Store.
 - Offline Store.
+- Fuentes `raw/`, `cleaned/` y `curated/` en S3.
 - Features de entrenamiento.
 - Features de inferencia.
 - Target.
@@ -70,6 +71,12 @@ Usa SageMaker Processing Jobs cuando los datos llegan en archivos o lotes period
 Raw data in S3
     |
     v
+Cleaned data in S3
+    |
+    v
+Curated features in S3
+    |
+    v
 SageMaker Processing Job
     |
     v
@@ -89,6 +96,16 @@ Este patron sirve para:
 - Recalculo diario u horario de features.
 - Preparacion auditable de datos de entrenamiento.
 - Batch inference.
+
+El laboratorio ya implementa una version pequena de este patron:
+
+```text
+s3://<S3_BUCKET>/raw/churn_raw.csv
+  -> s3://<S3_BUCKET>/cleaned/churn_cleaned.csv
+  -> s3://<S3_BUCKET>/curated/churn_features.csv
+  -> processing/feature_ingestion_entrypoint.py
+  -> SageMaker Feature Store
+```
 
 ### Actualizacion streaming
 
@@ -230,6 +247,17 @@ Rutas importantes:
 | Archivo local generado | `artifacts/local_outputs/feature_contract.json` |
 | Objeto S3 generado | `s3://<S3_BUCKET>/model_registry_metadata/feature_contract.json` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar contrato de features para labs futuros | `src/export_feature_metadata.py`, `src/feature_schema.py` |
+| Cambiar features disponibles para real-time | `src/feature_schema.py`, `training/inference.py` |
+| Cambiar transformacion compartida batch/real-time | `src/feature_pipeline.py`, `processing/utils.py`, `training/inference.py` |
+| Cambiar metadata de modelo registrado | `src/register_model.py`, `src/model_card.py`, `src/training_report.py` |
+| Cambiar aprobacion deployable antes de despliegue | `src/approve_model.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
+
 ## Resultado esperado
 
 Local:
@@ -293,10 +321,11 @@ En un laboratorio de batch inference, el flujo esperado sera:
 
 1. Leer datos desde Offline Store o desde un dataset procesado derivado.
 2. Excluir `churn_label`.
-3. Ordenar columnas segun `inference_features` o segun el bundle del modelo.
-4. Usar el artefacto registrado o seleccionado.
-5. Ejecutar SageMaker Batch Transform o el mecanismo batch definido por el curso.
-6. Guardar predicciones en S3.
+3. Aplicar el mismo one-hot encoding usado en entrenamiento para `plan_type`, `country` y `device_type`.
+4. Ordenar columnas segun `feature_columns` del bundle del modelo.
+5. Usar el artefacto registrado o seleccionado.
+6. Ejecutar SageMaker Batch Transform o el mecanismo batch definido por el curso.
+7. Guardar predicciones en S3.
 
 Componentes ya preparados:
 
@@ -312,6 +341,7 @@ Componentes que faltara construir:
 - Dataset batch sin target.
 - Ubicacion S3 de predicciones.
 - Validacion de outputs batch.
+- Automatizacion que tome un Model Package aprobado y ejecute `CreateTransformJob`.
 
 ## Como se conecta con real-time inference
 
@@ -321,8 +351,9 @@ En un laboratorio de real-time inference, el flujo esperado sera:
 2. Consultar Online Store con ese `customer_id`.
 3. Construir el payload usando `inference_features`.
 4. Excluir `churn_label`.
-5. Crear o usar un SageMaker Real-Time Endpoint.
-6. Invocar el endpoint y recibir una prediccion.
+5. Aplicar el mismo one-hot encoding usado en entrenamiento, o usar un artefacto de modelo que ya incluya el encoder.
+6. Crear o usar un SageMaker Real-Time Endpoint.
+7. Invocar el endpoint y recibir una prediccion.
 
 Componentes ya preparados:
 
@@ -337,8 +368,69 @@ Componentes que faltara construir:
 - Modelo aprobado para despliegue.
 - SageMaker Model/Endpoint Configuration/Endpoint.
 - Logica de consulta Online Store + payload.
+- Estrategia de preprocesamiento para que `plan_type`, `country` y `device_type` se codifiquen igual que en entrenamiento.
 - Monitoreo del endpoint.
 - Estrategia de costos para endpoints persistentes.
+- Deployment pipeline que cree staging, ejecute pruebas y promueva a produccion.
+
+## Flujo productivo despues de aprobar un modelo
+
+En un caso real, la aprobacion del modelo no deberia crear automaticamente un endpoint sin controles. La aprobacion debe iniciar o habilitar un workflow de despliegue:
+
+```text
+Human approves Model Package in Model Registry
+  -> SageMaker emits Model Package State Change event
+  -> Amazon EventBridge matches ModelApprovalStatus=Approved
+  -> Deployment workflow starts
+  -> Create SageMaker Model
+  -> Deploy staging endpoint or run staging batch transform
+  -> Smoke tests and monitoring checks
+  -> Optional production approval
+  -> Production endpoint update or batch scoring job
+```
+
+`Models > Deployable models` significa que existe metadata lista para crear un endpoint o un Batch Transform Job. No significa que el modelo este sirviendo trafico.
+
+Para real-time, el workflow crea o actualiza:
+
+```text
+SageMaker Model
+Endpoint configuration
+Endpoint
+```
+
+Para batch, el workflow puede crear:
+
+```text
+SageMaker Model
+Batch Transform Job
+```
+
+Servicios tipicos:
+
+| Necesidad | Servicio |
+|---|---|
+| Detectar aprobacion humana | Amazon EventBridge |
+| Orquestar despliegue | AWS CodePipeline, AWS Step Functions o SageMaker Pipelines |
+| Ejecutar logica tecnica | AWS CodeBuild, AWS Lambda, scripts Python, CDK o Terraform |
+| Servir sincrono | SageMaker Real-Time Endpoint |
+| Servir batch | SageMaker Batch Transform |
+| Observar y alertar | CloudWatch, SageMaker Model Monitor, SNS |
+
+## Donde poner el preprocesamiento en inferencia
+
+El modelo de este laboratorio fue entrenado con datos ya transformados por Processing. Eso significa que `model.tar.gz` espera columnas numericas, incluidas columnas one-hot como `plan_type_free`, `country_pe` o `device_type_mobile`, segun las categorias presentes en el dataset.
+
+Para usar el modelo con datos crudos en batch o real-time tienes estas opciones:
+
+| Opcion | Como funciona | Ventaja | Cuidado principal |
+|---|---|---|---|
+| Guardar encoder dentro del modelo | Entrenas un `sklearn Pipeline` con `ColumnTransformer` y `OneHotEncoder`, y guardas encoder + scaler + modelo juntos. | Es la opcion mas robusta para evitar diferencias entre training e inferencia. | Requiere actualizar el script de training. |
+| Transformar en `inference.py` | El contenedor recibe datos crudos, aplica one-hot encoding, rellena columnas faltantes y ordena segun `feature_columns`. | Facil de entender para un laboratorio. | Debe manejar categorias nuevas o faltantes. |
+| Usar SageMaker Inference Pipeline | Un contenedor prepara features y otro contenedor ejecuta el modelo. | Separa responsabilidades cuando el preprocesamiento es grande. | Agrega complejidad operativa. |
+| Preprocesar antes de llamar al endpoint | Un job batch, Lambda, Flink o aplicacion cliente envia columnas ya codificadas. | Util si ya existe una capa de feature serving. | Puede crear training-serving skew si no comparte codigo con training. |
+
+Para produccion, la regla es que la transformacion debe existir en un solo lugar fuente y versionarse junto al modelo o junto al contrato de features. Si se mantiene en varios scripts independientes, es facil que el modelo aprenda con una representacion y prediga con otra.
 
 ## Como se conecta con near-real-time inference
 

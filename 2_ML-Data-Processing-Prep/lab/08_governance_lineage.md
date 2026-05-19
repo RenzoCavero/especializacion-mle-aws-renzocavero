@@ -25,9 +25,17 @@ La dataset card documenta:
 Comandos:
 
 ```bash
+bash scripts/lab.sh step 08
 make lineage
 make dataset-card
 make download-reports
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\lab.ps1 step 08
+.\scripts\download_reports.ps1
 ```
 
 ## Que Documenta El Lineage
@@ -88,3 +96,25 @@ En AWS, los mismos archivos quedan en:
 s3://<bucket>/lineage/
 s3://<bucket>/reports/
 ```
+
+## Rutas De Ejecucion
+
+| Nivel | Ruta |
+|---|---|
+| Runner numerado | `scripts/lab.sh step 08` o `scripts/lab.ps1 step 08` |
+| Script directo | `scripts/run_processing_job.sh lineage,dataset-card` |
+| Descarga local | `scripts/download_reports.sh` o `scripts/download_reports.ps1` |
+| Modulo que envia el Glue Job | `src.run_processing_job` |
+| Logica lineage | `src.lineage_report` |
+| Logica dataset card | `src.dataset_card` |
+| Descarga de reportes | `src.download_reports` |
+
+## Validacion En AWS Console
+
+1. Abre Amazon S3.
+2. Entra al bucket del laboratorio.
+3. Revisa `lineage/lineage.json` y `lineage/lineage.md`.
+4. Revisa `reports/dataset_card.json` y `reports/dataset_card.md`.
+5. Abre AWS Glue > ETL jobs > `ml-data-prep-lab-processing-job`.
+6. Confirma que el run que genero estos reportes esta en `Succeeded`.
+7. Abre CloudWatch Logs si necesitas verificar mensajes `Wrote lineage reports` y `Wrote dataset card`.

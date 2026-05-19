@@ -24,6 +24,7 @@ from src.submit_training_job import METRIC_DEFINITIONS
 
 LOGGER = logging.getLogger(__name__)
 PROCESSING_LIB_PATH = "/opt/ml/processing/lib"
+SRC_LIB_PATH = "/opt/ml/processing/code/src"
 
 
 def main() -> None:
@@ -36,6 +37,12 @@ def main() -> None:
     training_instance_type = state.get("baseline_training_instance_type", config.training_instance_type)
 
     input_data = ParameterString(name="InputDataS3Uri", default_value=config.feature_snapshot_s3_uri)
+    curated_features = ParameterString(name="CuratedFeaturesS3Uri", default_value=config.curated_features_s3_uri)
+    feature_source = ParameterString(name="FeatureSource", default_value=config.feature_data_source)
+    athena_output_s3_uri = ParameterString(
+        name="AthenaOutputS3Uri",
+        default_value=config.athena_query_results_s3_uri,
+    )
     model_approval_status = ParameterString(name="ModelApprovalStatus", default_value="PendingManualApproval")
     min_f1 = ParameterFloat(name="MinF1ForRegistration", default_value=0.50)
 
@@ -47,6 +54,54 @@ def main() -> None:
         sagemaker_session=session,
         base_job_name=f"{config.resource_prefix}-pipeline-processing",
     )
+
+    step_feature_ingestion = None
+    if config.processing_ingest_feature_store:
+        feature_ingestion_args = processor.run(
+            code=sdk_local_path("processing", "feature_ingestion_entrypoint.py"),
+            inputs=[
+                ProcessingInput(
+                    source=sdk_local_path("src"),
+                    destination=SRC_LIB_PATH,
+                    input_name="src-source",
+                ),
+                ProcessingInput(
+                    source=curated_features,
+                    destination="/opt/ml/processing/curated",
+                    input_name="curated-features",
+                ),
+            ],
+            outputs=[
+                ProcessingOutput(
+                    output_name="metadata",
+                    source="/opt/ml/processing/output/metadata",
+                    destination=s3_join(config.s3_bucket_name, "feature-store", "pipeline-ingestion", "metadata"),
+                )
+            ],
+            arguments=[
+                "--input-data",
+                "/opt/ml/processing/curated",
+                "--feature-group-name",
+                config.feature_group_name,
+                "--aws-region",
+                config.aws_region,
+                "--source-raw-s3-uri",
+                config.raw_data_s3_uri,
+                "--source-cleaned-s3-uri",
+                config.cleaned_data_s3_uri,
+                "--source-curated-s3-uri",
+                curated_features,
+                "--metadata-output",
+                "/opt/ml/processing/output/metadata",
+            ],
+            wait=False,
+        )
+        step_feature_ingestion = ProcessingStep(
+            name="IngestCuratedFeatures",
+            step_args=feature_ingestion_args,
+            description="Ingest curated feature rows into SageMaker Feature Store.",
+        )
+
     processing_args = processor.run(
         code=sdk_local_path("processing", "processing_entrypoint.py"),
         inputs=[
@@ -71,9 +126,28 @@ def main() -> None:
                 destination=s3_join(config.s3_bucket_name, "processing", "pipeline", "metadata"),
             ),
         ],
+        arguments=[
+            "--feature-source",
+            feature_source,
+            "--feature-group-name",
+            config.feature_group_name,
+            "--aws-region",
+            config.aws_region,
+            "--athena-output-s3-uri",
+            athena_output_s3_uri,
+            "--offline-store-max-wait-seconds",
+            str(config.offline_store_max_wait_seconds),
+            "--offline-store-poll-seconds",
+            str(config.offline_store_poll_seconds),
+        ]
+        + (["--allow-snapshot-fallback"] if config.allow_feature_snapshot_fallback else []),
         wait=False,
     )
-    step_process = ProcessingStep(name="ProcessChurnFeatures", step_args=processing_args)
+    step_process = ProcessingStep(
+        name="ProcessChurnFeatures",
+        step_args=processing_args,
+        depends_on=[step_feature_ingestion] if step_feature_ingestion else None,
+    )
 
     estimator = SKLearn(
         entry_point="train.py",
@@ -177,10 +251,14 @@ def main() -> None:
         else_steps=[],
     )
 
+    steps = [step_process, step_train, step_eval, step_condition]
+    if step_feature_ingestion:
+        steps.insert(0, step_feature_ingestion)
+
     pipeline = Pipeline(
         name=config.pipeline_name,
-        parameters=[input_data, model_approval_status, min_f1],
-        steps=[step_process, step_train, step_eval, step_condition],
+        parameters=[input_data, curated_features, feature_source, athena_output_s3_uri, model_approval_status, min_f1],
+        steps=steps,
         sagemaker_session=session,
     )
     pipeline.upsert(role_arn=config.sagemaker_execution_role_arn)

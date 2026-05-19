@@ -1,12 +1,17 @@
 PYTHON ?= python
 
-.PHONY: help install deploy-infra data upload-raw create-feature-group ingest-features validate-online-store query-offline-store processing train-baseline evaluate-baseline hpo evaluate-best compare-models register-model export-feature-metadata training-report model-card create-pipeline run-pipeline download-reports validate cost-check show-experiments clean-local-outputs lab lab-00-context lab-01-aws-setup lab-02-training-data lab-03-feature-store lab-04-processing lab-05-training lab-06-evaluation lab-07-hpo lab-08-experiments lab-09-model-registry lab-10-pipeline lab-11-cost lab-12-cleanup lab-13-next-labs all-cloud destroy-infra test
+.PHONY: help install deploy-infra data upload-raw prepare-feature-sources create-feature-group ingest-features validate-online-store query-offline-store processing train-baseline evaluate-baseline hpo evaluate-best compare-models autopilot register-model approve-model export-feature-metadata training-report model-card create-pipeline run-pipeline create-hpo-pipeline run-hpo-pipeline download-reports validate cost-check show-experiments clean-local-outputs lab lab-00-context lab-01-aws-setup lab-02-training-data lab-03-feature-store lab-04-processing lab-05-training lab-06-evaluation lab-07-hpo lab-08-experiments lab-09-model-registry lab-10-pipeline lab-11-cost lab-12-cleanup lab-13-next-labs all-cloud destroy-infra test
 
 help:
 	@echo "AWS ML Lab 03 targets:"
 	@echo "  make all-cloud      Deploy infra and run the full cloud training flow"
 	@echo "  make lab            Same as all-cloud, without cleanup"
 	@echo "  make lab-03-feature-store  Run a specific teaching step"
+	@echo "  make autopilot      Optional small SageMaker Autopilot demo"
+	@echo "  make approve-model  Approve registered model and create deployable model metadata"
+	@echo "  make run-pipeline   Execute the baseline retraining SageMaker Pipeline"
+	@echo "  make create-hpo-pipeline  Optional Pipeline with SageMaker HPO"
+	@echo "  make run-hpo-pipeline     Execute the optional HPO Pipeline"
 	@echo "  make destroy-infra  Cleanup SageMaker resources and delete CloudFormation stack"
 	@echo "  make clean-local-outputs  Delete local generated artifacts only"
 	@echo "  make validate       Validate Feature Store, S3, jobs, registry and no endpoints"
@@ -23,11 +28,14 @@ data:
 upload-raw:
 	$(PYTHON) -m src.upload_raw_data
 
+prepare-feature-sources:
+	$(PYTHON) -m src.prepare_feature_sources
+
 create-feature-group:
 	$(PYTHON) -m src.create_feature_group
 
 ingest-features:
-	$(PYTHON) -m src.ingest_features
+	$(PYTHON) -m src.submit_feature_ingestion_job
 
 validate-online-store:
 	$(PYTHON) -m src.get_online_features
@@ -53,8 +61,14 @@ evaluate-best:
 compare-models: evaluate-best
 	$(PYTHON) -m src.compare_models
 
+autopilot:
+	$(PYTHON) -m src.submit_autopilot_job
+
 register-model:
 	$(PYTHON) -m src.register_model
+
+approve-model:
+	$(PYTHON) -m src.approve_model
 
 export-feature-metadata:
 	$(PYTHON) -m src.export_feature_metadata
@@ -70,6 +84,12 @@ create-pipeline:
 
 run-pipeline:
 	$(PYTHON) -m src.run_pipeline
+
+create-hpo-pipeline:
+	$(PYTHON) -m src.create_hpo_pipeline
+
+run-hpo-pipeline:
+	$(PYTHON) -m src.run_hpo_pipeline
 
 download-reports:
 	$(PYTHON) -m src.download_outputs
@@ -90,11 +110,11 @@ test:
 	$(PYTHON) -m pytest tests
 
 lab-00-context:
-	@echo "Read lab/00_contexto_negocio.md and doc/3_AWS_Model_Training_Optimization.pdf before running cloud resources."
+	@echo "Read lab/00_contexto_negocio.md before running cloud resources."
 
 lab-01-aws-setup: deploy-infra
 
-lab-02-training-data: data upload-raw
+lab-02-training-data: data upload-raw prepare-feature-sources
 
 lab-03-feature-store: create-feature-group ingest-features validate-online-store query-offline-store
 

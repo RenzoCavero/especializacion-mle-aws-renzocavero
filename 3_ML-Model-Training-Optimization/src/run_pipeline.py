@@ -22,6 +22,9 @@ def main() -> None:
         PipelineName=config.pipeline_name,
         PipelineParameters=[
             {"Name": "InputDataS3Uri", "Value": config.feature_snapshot_s3_uri},
+            {"Name": "CuratedFeaturesS3Uri", "Value": config.curated_features_s3_uri},
+            {"Name": "FeatureSource", "Value": config.feature_data_source},
+            {"Name": "AthenaOutputS3Uri", "Value": config.athena_query_results_s3_uri},
             {"Name": "ModelApprovalStatus", "Value": "PendingManualApproval"},
             {"Name": "MinF1ForRegistration", "Value": "0.50"},
         ],

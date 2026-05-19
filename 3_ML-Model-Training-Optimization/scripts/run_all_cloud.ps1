@@ -4,8 +4,9 @@ Set-Location (Split-Path -Parent $PSScriptRoot)
 python -m src.generate_sample_data
 .\scripts\deploy_infra.ps1
 python -m src.upload_raw_data
+python -m src.prepare_feature_sources
 python -m src.create_feature_group
-python -m src.ingest_features
+python -m src.submit_feature_ingestion_job
 python -m src.get_online_features
 python -m src.query_offline_store
 python -m src.submit_processing_job

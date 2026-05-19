@@ -52,3 +52,32 @@ def test_load_env_file_keeps_existing_non_empty_values(monkeypatch, tmp_path) ->
     config._load_env_file(env_file)
 
     assert config.os.environ["S3_BUCKET_NAME"] == "explicit-bucket"
+
+
+def test_autopilot_defaults_are_small_for_demo(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(config, "ENV_FILE", tmp_path / ".env")
+    monkeypatch.setattr(config, "GENERATED_ENV_FILE", tmp_path / ".env.cloud")
+    for name in (
+        "AUTOPILOT_MAX_CANDIDATES",
+        "AUTOPILOT_MAX_RUNTIME_SECONDS",
+        "AUTOPILOT_MODE",
+        "AUTOPILOT_ALGORITHMS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    app_config = config.get_config()
+
+    assert app_config.autopilot_max_candidates == 2
+    assert app_config.autopilot_max_runtime_seconds == 900
+    assert app_config.autopilot_mode == "ENSEMBLING"
+    assert app_config.autopilot_algorithms == ("linear-learner", "xgboost")
+
+
+def test_autopilot_algorithms_can_be_overridden(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(config, "ENV_FILE", tmp_path / ".env")
+    monkeypatch.setattr(config, "GENERATED_ENV_FILE", tmp_path / ".env.cloud")
+    monkeypatch.setenv("AUTOPILOT_ALGORITHMS", "linear-learner, xgboost ")
+
+    app_config = config.get_config()
+
+    assert app_config.autopilot_algorithms == ("linear-learner", "xgboost")

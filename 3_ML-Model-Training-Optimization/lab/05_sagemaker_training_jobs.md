@@ -19,6 +19,18 @@ El job entrena un modelo `sklearn.linear_model.LogisticRegression` usando:
 | Train | `s3://<S3_BUCKET>/input/train/train.csv` |
 | Validation | `s3://<S3_BUCKET>/input/validation/validation.csv` |
 
+Estos archivos no se escriben manualmente. Los crea el Processing Job del paso 04 a partir del Offline Store de SageMaker Feature Store:
+
+```text
+Feature Store Offline Store
+  -> Athena materialization
+  -> Processing Job
+  -> s3://<S3_BUCKET>/input/train/train.csv
+  -> s3://<S3_BUCKET>/input/validation/validation.csv
+```
+
+Esto es la forma indirecta y recomendada de usar Feature Store para training: el Training Job recibe datasets versionables en S3, mientras el Offline Store conserva la historia de features.
+
 El artefacto queda en:
 
 ```text
@@ -31,6 +43,53 @@ s3://<S3_BUCKET>/output/baseline/<training-job>/output/model.tar.gz
 - Script Mode: forma de ejecutar un script propio dentro de una imagen administrada.
 - Model artifact: paquete `model.tar.gz` que contiene el modelo entrenado.
 - Metric definitions: expresiones que SageMaker usa para extraer metricas desde logs.
+- Offline Store indirecto: patron donde Feature Store alimenta un dataset historico mediante Processing/Athena, y el Training Job consume el resultado en S3.
+
+## Donde queda el preprocesamiento del modelo
+
+En este laboratorio, el one-hot encoding ocurre antes del Training Job, dentro del Processing Job del paso 04:
+
+```text
+Feature Store Offline Store
+  -> Athena
+  -> Processing Job
+  -> one-hot encoding
+  -> train.csv / validation.csv / test.csv
+  -> Training Job
+```
+
+El Training Job recibe columnas ya numericas. Luego `training/train.py` entrena un `sklearn.pipeline.Pipeline` que contiene:
+
+```text
+StandardScaler -> LogisticRegression
+```
+
+El artefacto `model.joblib` guarda:
+
+- El pipeline `StandardScaler + LogisticRegression`.
+- La lista `feature_columns` que el modelo espera.
+- Metricas de validacion.
+
+Importante: el one-hot encoder no queda guardado como objeto dentro del modelo actual. Queda aplicado en los CSVs generados por Processing. Por eso, si en inferencia envias datos crudos con columnas como `plan_type`, `country` y `device_type`, necesitas aplicar la misma transformacion antes de invocar el modelo.
+
+Opciones comunes para produccion:
+
+| Opcion | Como funciona | Cuando usarla |
+|---|---|---|
+| Preprocesamiento dentro del artefacto del modelo | Entrenar un `sklearn Pipeline` con `ColumnTransformer`/`OneHotEncoder` y guardar todo en `model.joblib`. | Recomendado cuando quieres que el endpoint reciba datos crudos y el modelo se encargue de transformar. |
+| Preprocesamiento en `inference.py` | El script de inferencia recibe JSON/CSV crudo, aplica one-hot encoding y ordena columnas antes de llamar al modelo. | Util cuando el preprocesamiento es simple y quieres mantener una sola imagen de inferencia. |
+| SageMaker Inference Pipeline | Un contenedor transforma datos y otro contenedor ejecuta el modelo. | Util cuando el preprocesamiento es pesado o se comparte entre varios modelos. |
+| Preprocesamiento upstream | Batch job, streaming job o aplicacion cliente envia al endpoint columnas ya codificadas. | Util en batch inference o cuando ya tienes una capa de feature serving controlada. |
+
+Para este laboratorio educativo, la opcion elegida mantiene visible el flujo de datos:
+
+```text
+Processing = preparar dataset
+Training = entrenar modelo
+Inference futura = reutilizar contrato de features y aplicar la misma transformacion
+```
+
+En un sistema productivo, la opcion mas robusta suele ser guardar el encoder junto con el modelo o incluir la transformacion en el codigo de inferencia. Asi reduces el riesgo de training-serving skew, es decir, diferencias entre como transformas datos al entrenar y como los transformas al predecir.
 
 ## Prerrequisitos
 
@@ -106,6 +165,20 @@ Hiperparametros baseline:
 | `class-weight` | `balanced` |
 | `random-state` | `42` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar como se envia el Training Job | `src/submit_training_job.py` |
+| Cambiar hiperparametros baseline standalone | `src/submit_training_job.py`, funcion `build_estimator` |
+| Cambiar hiperparametros baseline dentro del Pipeline | `src/create_pipeline.py` |
+| Cambiar algoritmo o pipeline scikit-learn | `training/train.py` |
+| Cambiar dependencias del contenedor de training | `training/requirements.txt` |
+| Cambiar carga de `train.csv` y `validation.csv` | `training/utils.py` |
+| Cambiar metricas capturadas por SageMaker | `src/submit_training_job.py`, constante `METRIC_DEFINITIONS`, y los `print()` en `training/train.py` |
+| Cambiar instancia o fallbacks de Training | `.env`, `.env.example`, `src/config.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
+
 ## Resultado esperado
 
 La terminal debe mostrar metricas como:
@@ -139,11 +212,14 @@ El estado debe incluir:
 5. Abre el detalle del job.
 6. Revisa `Hyperparameters` y confirma `C`, `max-iter`, `class-weight` y `random-state`.
 7. Revisa `Input data configuration` y confirma canales `train` y `validation`.
-8. Revisa `Output` y copia la ruta S3 del model artifact.
-9. Revisa `Metrics` para ver las metricas capturadas.
-10. Abre CloudWatch Logs desde el detalle del job.
-11. Busca `Reporting training SUCCESS`.
-12. Ve a S3 y confirma que existe `model.tar.gz`.
+8. Abre las rutas de entrada y confirma que apuntan a:
+   - `s3://<S3_BUCKET>/input/train/train.csv`.
+   - `s3://<S3_BUCKET>/input/validation/validation.csv`.
+9. Revisa `Output` y copia la ruta S3 del model artifact.
+10. Revisa `Metrics` para ver las metricas capturadas.
+11. Abre CloudWatch Logs desde el detalle del job.
+12. Busca `Reporting training SUCCESS`.
+13. Ve a S3 y confirma que existe `model.tar.gz`.
 
 ## Diferencia con otras opciones de `Jobs`
 

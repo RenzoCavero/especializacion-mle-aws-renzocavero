@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Crear una definicion de SageMaker Pipeline que automatiza procesamiento, entrenamiento, evaluacion y registro condicional.
+Crear una definicion de SageMaker Pipeline que automatiza ingesta de features, procesamiento, entrenamiento, evaluacion y registro condicional.
 
 ## Que vas a construir o validar
 
@@ -16,11 +16,24 @@ El Pipeline incluye estos steps:
 
 | Step | Funcion |
 |---|---|
+| `IngestCuratedFeatures` | Leer `curated/` e ingestar records en Feature Store. |
 | `ProcessChurnFeatures` | Preparar train, validation, test y metadata. |
 | `TrainChurnBaseline` | Entrenar un candidato baseline. |
 | `EvaluateChurnModel` | Calcular metricas sobre test. |
 | `CheckF1BeforeRegister` | Validar umbral minimo de F1. |
 | `RegisterChurnModel` | Registrar el modelo si la condicion se cumple. |
+
+Este Pipeline puede usarse para reentrenamiento. Cada vez que existan nuevos datos en `curated/` o nuevas filas en Feature Store, puedes ejecutar de nuevo el Pipeline para reconstruir el dataset, entrenar un nuevo candidato baseline, evaluarlo y registrarlo si supera el umbral de calidad.
+
+El comando `python -m src.lab_runner step 10` solo crea o actualiza la definicion del Pipeline. Para ejecutar un reentrenamiento debes iniciar una ejecucion con `python -m src.run_pipeline` o `make run-pipeline`.
+
+Importante: este Pipeline base no ejecuta HPO. Es util para reentrenamientos controlados con hiperparametros fijos. Para un flujo con busqueda de hiperparametros, este laboratorio incluye una variante opcional llamada:
+
+```text
+HPO_PIPELINE_NAME=ml-training-opt-lab-hpo-pipeline
+```
+
+La variante HPO agrega un `TuningStep` administrado por SageMaker Pipelines.
 
 ## Conceptos clave
 
@@ -37,6 +50,7 @@ El Pipeline reutiliza el mismo codigo central de procesamiento, entrenamiento y 
 
 | Step del Pipeline | Codigo reutilizado | Equivalente anterior | Comentario |
 |---|---|---|---|
+| `IngestCuratedFeatures` | `processing/feature_ingestion_entrypoint.py` y `src/feature_pipeline.py` | Paso 03, `src.submit_feature_ingestion_job` | Lee `curated/churn_features.csv`, aplica transformaciones compartidas y llama `PutRecord`. |
 | `ProcessChurnFeatures` | `processing/processing_entrypoint.py` | Paso 04, `src.submit_processing_job` | Usa la misma logica de transformacion y split train/validation/test. |
 | `TrainChurnBaseline` | `training/train.py` | Paso 05, `src.submit_training_job` | Entrena el baseline con hiperparametros fijos. |
 | `EvaluateChurnModel` | `processing/evaluation_entrypoint.py` | Paso 06, `src.evaluate_model` | Calcula metricas sobre test usando el modelo generado por el step de training. |
@@ -53,7 +67,9 @@ El Pipeline agrega dependencias, parametros y registro condicional.
 
 Hay diferencias importantes:
 
-1. El Pipeline no ejecuta HPO. Usa un baseline con:
+1. El Pipeline usa el mismo entrypoint de ingesta del paso 03, por lo que puede actualizar Feature Store desde `CuratedFeaturesS3Uri`.
+2. El Pipeline usa el mismo entrypoint del paso 04, por lo que puede materializar datos desde el Offline Store via Athena cuando `FeatureSource=offline_store`.
+3. El Pipeline no ejecuta HPO. Usa un baseline con:
 
    ```text
    C=1.0
@@ -62,9 +78,49 @@ Hay diferencias importantes:
    random-state=42
    ```
 
-2. El Pipeline registra el modelo con `RegisterModel` si la condicion de F1 se cumple.
-3. El paso 09 standalone agrega metadata adicional, contrato de features, `training_report.md` y `model_card.md`.
-4. Si quieres que el Pipeline incluya HPO, comparacion de modelos o reportes custom, tendrias que agregar steps adicionales.
+4. El Pipeline registra el modelo con `RegisterModel` si la condicion de F1 se cumple.
+5. El paso 09 standalone agrega metadata adicional, contrato de features, `training_report.md` y `model_card.md`.
+6. Si quieres que el Pipeline incluya HPO, comparacion de modelos o reportes custom, tendrias que agregar steps adicionales.
+
+## Pipeline opcional con HPO
+
+El repositorio tambien incluye una definicion opcional de Pipeline con Hyperparameter Tuning. Este Pipeline no reemplaza al baseline; lo complementa para mostrar un patron mas cercano a produccion.
+
+Steps esperados:
+
+| Step | Funcion |
+|---|---|
+| `IngestCuratedFeaturesForHPO` | Ingestar features curadas en Feature Store antes de construir el dataset. |
+| `ProcessChurnFeaturesForHPO` | Leer el Offline Store via Athena y crear train, validation y test. |
+| `TuneChurnModel` | Ejecutar un Tuning Job administrado por SageMaker con varios Training Jobs hijos. |
+| `EvaluateBestHPOModel` | Evaluar el mejor artefacto producido por HPO sobre el split de test. |
+| `CheckHPOF1BeforeRegister` | Aplicar un gate de F1 antes del registro. |
+| `RegisterBestHPOModel-RegisterModel` | Registrar el mejor candidato de HPO si cumple el gate. |
+
+Este Pipeline usa el servicio administrado de Hyperparameter Tuning de SageMaker. No es un bucle manual dentro de un script. SageMaker crea el Tuning Job, lanza los Training Jobs hijos, compara la metrica objetivo `validation:f1` y expone el mejor modelo al siguiente step.
+
+Hiperparametros explorados:
+
+| Hiperparametro | Tipo | Rango |
+|---|---|---|
+| `C` | Continuo logaritmico | `0.01` a `10.0` |
+| `max-iter` | Entero | `150` a `450` |
+| `class-weight` | Categorico | `balanced`, `none` |
+
+Configuracion de costo controlado:
+
+| Variable | Default | Uso |
+|---|---|---|
+| `HPO_MAX_JOBS` | `4` | Numero total de Training Jobs hijos. |
+| `HPO_MAX_PARALLEL_JOBS` | `1` | Numero de jobs en paralelo. |
+
+Buenas practicas que muestra esta variante:
+
+1. El dataset se construye antes de HPO desde Feature Store Offline Store.
+2. HPO entrena desde datasets finales en S3, no directamente desde Feature Store.
+3. El mejor modelo de HPO se evalua en test antes de registrarse.
+4. El registro queda en `PendingManualApproval`.
+5. El despliegue queda fuera del pipeline de entrenamiento.
 
 ## Diseno realista con HPO y seleccion de modelo
 
@@ -163,6 +219,54 @@ data_quality_checks = passed
 manual_approval = required
 ```
 
+## Pipeline de entrenamiento vs pipeline de despliegue
+
+El Pipeline de este laboratorio es un pipeline de entrenamiento y registro. Su responsabilidad termina cuando registra un candidato en Model Registry:
+
+```text
+Process -> Train -> Evaluate -> CheckQualityGate -> RegisterModel
+```
+
+Un pipeline de despliegue es otro workflow. Normalmente empieza despues de la aprobacion humana del Model Package:
+
+```text
+Model Package Approved
+  -> EventBridge
+  -> Deployment pipeline
+  -> Staging deploy
+  -> Smoke tests
+  -> Production approval
+  -> Production deploy
+```
+
+La separacion es saludable porque entrenamiento y despliegue tienen riesgos distintos:
+
+| Pipeline | Pregunta que responde | Ejemplos de steps |
+|---|---|---|
+| Training pipeline | El modelo candidato es suficientemente bueno para registrarse? | Processing, Training, HPO, Evaluation, RegisterModel. |
+| Deployment pipeline | El modelo aprobado puede servirse de forma segura? | CreateModel, deploy staging, smoke tests, approval, update production endpoint, rollback. |
+
+El evento que conecta ambos mundos suele ser un cambio en Model Registry:
+
+```text
+ModelApprovalStatus = Approved
+```
+
+Amazon EventBridge puede capturar ese evento y disparar CodePipeline, Step Functions o una Lambda que inicie el workflow de despliegue.
+
+Ejemplo de responsabilidades:
+
+```text
+EventBridge:
+  detecta "SageMaker Model Package State Change" con status Approved
+
+Step Functions o CodePipeline:
+  ordena los pasos de despliegue
+
+CodeBuild o Lambda:
+  ejecuta scripts que llaman CreateModel, CreateEndpointConfig, UpdateEndpoint
+```
+
 ## Donde entra Feature Store en un pipeline real
 
 Feature Store entra antes del entrenamiento y tambien antes de la inferencia.
@@ -255,15 +359,29 @@ Nota importante: si usas features con timestamps, el join debe ser point-in-time
    cd 3_ML-Model-Training-Optimization
    ```
 
-2. Completa al menos los pasos 01, 02 y 04.
+2. Completa al menos los pasos 01, 02, 03 y 04.
 
-3. Confirma que existe:
+3. Confirma que existe el Offline Store y la tabla Glue del Feature Group.
+
+4. Confirma que existe la fuente curada que el pipeline puede volver a ingestar:
+
+   ```text
+   s3://<S3_BUCKET>/curated/churn_features.csv
+   ```
+
+5. Confirma que existe el snapshot de fallback:
 
    ```text
    s3://<S3_BUCKET>/processing/input/churn_features.csv
    ```
 
-4. Confirma que el Model Package Group existe o que tienes permisos para crearlo cuando el pipeline registre.
+6. Confirma que el Model Package Group existe o que tienes permisos para crearlo cuando el pipeline registre.
+
+7. Si ves errores de permisos con Athena, `PutRecord` o AddTags, actualiza infraestructura:
+
+   ```bash
+   bash scripts/lab.sh step 01
+   ```
 
 ## Pasos de ejecucion
 
@@ -285,7 +403,17 @@ Con Bash o Git Bash:
 bash scripts/lab.sh step 10
 ```
 
-No hay wrapper `.ps1` especifico para crear el pipeline. En Windows usa el comando Python.
+Tambien puedes usar los wrappers directos:
+
+```bash
+bash scripts/create_pipeline.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\create_pipeline.ps1
+```
 
 Ejecucion opcional del pipeline:
 
@@ -299,19 +427,106 @@ O:
 python -m src.run_pipeline
 ```
 
+Con wrappers:
+
+```bash
+bash scripts/run_pipeline.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\run_pipeline.ps1
+```
+
+Crear o actualizar el Pipeline opcional con HPO:
+
+```bash
+make create-hpo-pipeline
+```
+
+O:
+
+```bash
+python -m src.create_hpo_pipeline
+```
+
+Con Bash o Git Bash:
+
+```bash
+bash scripts/create_hpo_pipeline.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\create_hpo_pipeline.ps1
+```
+
+Ejecutar el Pipeline opcional con HPO:
+
+```bash
+make run-hpo-pipeline
+```
+
+O:
+
+```bash
+python -m src.run_hpo_pipeline
+```
+
+Con Bash o Git Bash:
+
+```bash
+bash scripts/run_hpo_pipeline.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\run_hpo_pipeline.ps1
+```
+
 Advertencia: ejecutar el pipeline crea nuevos Processing Jobs, Training Jobs y posiblemente nuevos Model Packages. Eso genera costo adicional.
+La variante HPO genera mas costo que el Pipeline baseline porque crea varios Training Jobs hijos.
 
 Rutas importantes:
 
 | Tipo | Ruta |
 |---|---|
-| Wrapper general para crear pipeline | `scripts/lab.sh step 10` |
+| Wrapper general para crear pipeline baseline | `scripts/lab.sh step 10` |
+| Wrapper directo para crear pipeline baseline | `scripts/create_pipeline.sh`, `scripts/create_pipeline.ps1` |
+| Wrapper directo para ejecutar pipeline baseline | `scripts/run_pipeline.sh`, `scripts/run_pipeline.ps1` |
+| Wrapper directo para crear pipeline HPO | `scripts/create_hpo_pipeline.sh`, `scripts/create_hpo_pipeline.ps1` |
+| Wrapper directo para ejecutar pipeline HPO | `scripts/run_hpo_pipeline.sh`, `scripts/run_hpo_pipeline.ps1` |
 | Modulo que crea o actualiza la definicion | `src/create_pipeline.py` |
 | Modulo que inicia una ejecucion | `src/run_pipeline.py` |
+| Modulo que crea o actualiza la definicion HPO | `src/create_hpo_pipeline.py` |
+| Modulo que inicia una ejecucion HPO | `src/run_hpo_pipeline.py` |
+| Codigo remoto de `IngestCuratedFeatures` | `processing/feature_ingestion_entrypoint.py` |
+| Codigo compartido de feature engineering | `src/feature_pipeline.py`, montado dentro del Processing Job |
 | Codigo remoto de `ProcessChurnFeatures` | `processing/processing_entrypoint.py` |
 | Codigo remoto de `TrainChurnBaseline` | `training/train.py` |
+| Codigo remoto de los Training Jobs hijos de HPO | `training/train.py` |
 | Codigo remoto de `EvaluateChurnModel` | `processing/evaluation_entrypoint.py` |
 | Registro condicional | `RegisterModel` de SageMaker SDK dentro de `src/create_pipeline.py` |
+| Registro condicional HPO | `RegisterModel` de SageMaker SDK dentro de `src/create_hpo_pipeline.py` |
+
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar steps del Pipeline baseline | `src/create_pipeline.py` |
+| Cambiar parametros enviados al ejecutar Pipeline baseline | `src/run_pipeline.py` |
+| Cambiar steps del Pipeline HPO | `src/create_hpo_pipeline.py` |
+| Cambiar rangos de HPO del Pipeline | `src/create_hpo_pipeline.py` |
+| Cambiar parametros enviados al ejecutar Pipeline HPO | `src/run_hpo_pipeline.py` |
+| Cambiar umbral `MinF1ForRegistration` por defecto | `src/run_pipeline.py`, `src/run_hpo_pipeline.py` |
+| Cambiar codigo remoto de ingesta | `processing/feature_ingestion_entrypoint.py`, `src/feature_pipeline.py` |
+| Cambiar codigo remoto de processing | `processing/processing_entrypoint.py`, `processing/utils.py` |
+| Cambiar codigo remoto de training | `training/train.py` |
+| Cambiar codigo remoto de evaluacion | `processing/evaluation_entrypoint.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
 
 ## Resultado esperado
 
@@ -321,17 +536,34 @@ Al crear la definicion:
 - No se ejecutan jobs inmediatamente.
 - `artifacts/local_outputs/run_state.json` incluye `pipeline_name`.
 
+Al crear la definicion HPO:
+
+- Se crea o actualiza `ml-training-opt-lab-hpo-pipeline`.
+- No se ejecutan jobs inmediatamente.
+- `artifacts/local_outputs/run_state.json` incluye `hpo_pipeline_name`.
+
 Al ejecutar el pipeline:
 
 - `run_state.json` incluye `pipeline_execution_arn`.
 - SageMaker crea jobs asociados a la ejecucion.
 - Si F1 cumple el umbral `MinF1ForRegistration=0.50`, se ejecuta `RegisterChurnModel`.
 
+Al ejecutar el Pipeline HPO:
+
+- `run_state.json` incluye `hpo_pipeline_execution_arn`.
+- SageMaker crea un Tuning Job desde el step `TuneChurnModel`.
+- El Tuning Job crea varios Training Jobs hijos.
+- El mejor artefacto de HPO se evalua en `EvaluateBestHPOModel`.
+- Si F1 cumple el umbral, se ejecuta `RegisterBestHPOModel-RegisterModel`.
+
 Parametros del Pipeline:
 
 | Parametro | Default |
 |---|---|
-| `InputDataS3Uri` | `s3://<S3_BUCKET>/processing/input/churn_features.csv` |
+| `InputDataS3Uri` | `s3://<S3_BUCKET>/processing/input/churn_features.csv`, usado como fallback. |
+| `CuratedFeaturesS3Uri` | `s3://<S3_BUCKET>/curated/churn_features.csv`, usado por `IngestCuratedFeatures`. |
+| `FeatureSource` | `offline_store` |
+| `AthenaOutputS3Uri` | `s3://<S3_BUCKET>/athena/query-results/` |
 | `ModelApprovalStatus` | `PendingManualApproval` |
 | `MinF1ForRegistration` | `0.50` |
 
@@ -347,7 +579,13 @@ Parametros del Pipeline:
 2. Ve a Amazon SageMaker > Pipelines.
 3. Busca `ml-training-opt-lab-pipeline`.
 4. Abre el Pipeline.
-5. Revisa el grafo y confirma los steps esperados.
+5. Revisa el grafo y confirma los steps esperados:
+   - `IngestCuratedFeatures`.
+   - `ProcessChurnFeatures`.
+   - `TrainChurnBaseline`.
+   - `EvaluateChurnModel`.
+   - `CheckF1BeforeRegister`.
+   - `RegisterChurnModel-RegisterModel`.
 6. Abre `Parameters` y confirma los valores default.
 7. Si ejecutaste el pipeline, abre `Executions`.
 8. Selecciona la ejecucion mas reciente.
@@ -356,13 +594,43 @@ Parametros del Pipeline:
 11. Navega al Processing Job o Training Job asociado.
 12. Abre CloudWatch Logs desde el job fallido.
 
+Para validar el Pipeline HPO:
+
+1. Abre AWS Console.
+2. Ve a Amazon SageMaker > Pipelines.
+3. Busca `ml-training-opt-lab-hpo-pipeline`.
+4. Abre el Pipeline y revisa el grafo.
+5. Confirma que aparece `TuneChurnModel`.
+6. Ejecuta el Pipeline o abre la ejecucion mas reciente.
+7. Cuando llegue al step `TuneChurnModel`, abre el detalle del step.
+8. Ve a Amazon SageMaker > Hyperparameter tuning jobs.
+9. Busca el Tuning Job creado por el Pipeline.
+10. Abre `Best training job` para identificar el mejor hijo.
+11. En `Training jobs`, confirma que existen jobs hijos con sufijos como `001`, `002`, `003`.
+12. Regresa al Pipeline y confirma que `EvaluateBestHPOModel` finaliza en `Completed`.
+13. Si el gate pasa, revisa Amazon SageMaker > Model Registry > `churn-model-package-group`.
+
+El step `EvaluateBestHPOModel` toma el artefacto del mejor Training Job desde:
+
+```text
+s3://<S3_BUCKET>/output/pipeline-hpo/<BEST_TRAINING_JOB_NAME>/output/model.tar.gz
+```
+
+Ese path debe coincidir con el `output_path` configurado para los Training Jobs hijos de HPO.
+
 ## Outputs esperados si ejecutas el pipeline
 
 ```text
 s3://<S3_BUCKET>/processing/pipeline/metadata/
+s3://<S3_BUCKET>/feature-store/pipeline-ingestion/metadata/
 s3://<S3_BUCKET>/output/pipeline/
 s3://<S3_BUCKET>/evaluation/pipeline/
 s3://<S3_BUCKET>/reports/pipeline/
+s3://<S3_BUCKET>/feature-store/hpo-pipeline-ingestion/metadata/
+s3://<S3_BUCKET>/processing/hpo-pipeline/metadata/
+s3://<S3_BUCKET>/output/pipeline-hpo/
+s3://<S3_BUCKET>/evaluation/pipeline-hpo/
+s3://<S3_BUCKET>/reports/pipeline-hpo/
 ```
 
 ## Problemas comunes y como resolverlos
@@ -372,9 +640,16 @@ s3://<S3_BUCKET>/reports/pipeline/
 | Se crea un Processing Job al crear pipeline | Se uso `SageMaker Session` normal en lugar de `PipelineSession`. | El codigo actual usa `pipeline_session`; verifica que estas ejecutando `src.create_pipeline` actualizado. |
 | Error `ParameterString is not JSON serializable` | Version anterior intentaba serializar parametros en una llamada no compatible. | Usa la version actual del codigo; valida que `create_pipeline.py` usa `PipelineSession`. |
 | `not authorized to perform: sagemaker:AddTags` en `CreateProcessingJob` | El rol de ejecucion de SageMaker no tiene permiso para etiquetar jobs creados por el Pipeline. SageMaker Pipelines agrega tags automaticamente a los jobs de cada step. | Actualiza la infraestructura con `python -m src.deploy_infra` o `bash scripts/lab.sh step 01` para aplicar la politica IAM que incluye `sagemaker:AddTags`; luego ejecuta de nuevo `python -m src.run_pipeline`. |
+| `not authorized to perform: sagemaker:PutRecord` en `IngestCuratedFeatures` | El pipeline intenta actualizar Feature Store desde un Processing Step y el rol no tiene permiso. | Reejecuta paso 01 para aplicar la politica IAM actualizada. |
+| `not authorized to perform: athena:StartQueryExecution` | El Pipeline usa el Offline Store via Athena y el rol no fue actualizado. | Ejecuta `bash scripts/lab.sh step 01` para actualizar el rol con permisos de Athena. |
+| `ProcessChurnFeatures` espera o cae a fallback | Offline Store escribe asincronicamente o la tabla Glue aun no tiene filas. | Espera unos minutos. Si `ALLOW_FEATURE_SNAPSHOT_FALLBACK=true`, revisa metadata para confirmar si uso fallback. |
 | Pipeline falla en step de training | Datos procesados ausentes o permisos insuficientes. | Abre el step, luego el Training Job y CloudWatch Logs. |
 | No se registra el modelo | F1 no supera `MinF1ForRegistration`. | Revisa `EvaluateChurnModel` y el Condition Step. |
+| `TuneChurnModel` falla con `not authorized to perform: sagemaker:ListTrainingJobsForHyperParameterTuningJob` | El Tuning Job puede haber terminado, pero SageMaker Pipelines necesita listar los Training Jobs hijos para identificar el mejor artefacto y continuar. | Ejecuta `python -m src.deploy_infra` o `bash scripts/lab.sh step 01` para actualizar el rol con `sagemaker:ListTrainingJobsForHyperParameterTuningJob`. Luego usa `Retry` en la ejecucion fallida o lanza una nueva ejecucion con `python -m src.run_hpo_pipeline`. |
+| `EvaluateBestHPOModel` falla con `No S3 objects found under .../output/pipeline-hpo/best-model/.../model.tar.gz` | La definicion del Pipeline apuntaba a un prefijo que no coincide con el `output_path` real de los Training Jobs hijos. | Actualiza el codigo, ejecuta `python -m src.create_hpo_pipeline` para subir la nueva definicion y lanza una nueva ejecucion con `python -m src.run_hpo_pipeline`. |
+| El Pipeline HPO falla en `TuneChurnModel` por cuota o capacidad | Cuota de Training insuficiente, capacidad no disponible o algun child Training Job fallo. | Revisa Hyperparameter tuning jobs y CloudWatch Logs. Si es cuota, reduce `HPO_MAX_JOBS` o usa una instancia disponible. |
+| El Pipeline HPO tarda mas que el baseline | HPO ejecuta varios Training Jobs hijos. | Es esperado. Para laboratorio, usa `HPO_MAX_JOBS=2` o `4` y `HPO_MAX_PARALLEL_JOBS=1`. |
 
 ## Limpieza de recursos
 
-Crear el Pipeline no ejecuta compute. Ejecutarlo si crea jobs. El Pipeline y versiones registradas se eliminan en el paso 12.
+Crear un Pipeline no ejecuta compute. Ejecutarlo si crea jobs. El Pipeline baseline, el Pipeline HPO y las versiones registradas se eliminan en el paso 12.

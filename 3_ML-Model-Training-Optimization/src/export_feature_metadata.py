@@ -31,6 +31,10 @@ def main() -> None:
         objective_metric_value=state.get("objective_metric_value"),
         preprocessing_metadata_s3_uri=state.get("preprocessing_metadata_s3_uri"),
         model_package_arn=state.get("model_package_arn"),
+        raw_data_s3_uri=state.get("raw_data_s3_uri") or config.raw_data_s3_uri,
+        cleaned_data_s3_uri=state.get("cleaned_data_s3_uri") or config.cleaned_data_s3_uri,
+        curated_features_s3_uri=state.get("curated_features_s3_uri") or config.curated_features_s3_uri,
+        feature_lineage_s3_uri=state.get("feature_lineage_s3_uri") or config.feature_lineage_s3_uri,
     )
     local_path = config.local_outputs_dir / "feature_contract.json"
     local_path.parent.mkdir(parents=True, exist_ok=True)

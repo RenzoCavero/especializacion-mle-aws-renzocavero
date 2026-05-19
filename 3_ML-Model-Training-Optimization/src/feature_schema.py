@@ -94,6 +94,10 @@ def build_feature_contract(
     objective_metric_value: float | None = None,
     preprocessing_metadata_s3_uri: str | None = None,
     model_package_arn: str | None = None,
+    raw_data_s3_uri: str | None = None,
+    cleaned_data_s3_uri: str | None = None,
+    curated_features_s3_uri: str | None = None,
+    feature_lineage_s3_uri: str | None = None,
 ) -> dict[str, Any]:
     return {
         "feature_group_name": feature_group_name,
@@ -113,6 +117,12 @@ def build_feature_contract(
         "model_package_arn": model_package_arn,
         "model_artifact_s3_uri": model_artifact_s3_uri,
         "dataset_s3_uri": dataset_s3_uri,
+        "source_data": {
+            "raw_s3_uri": raw_data_s3_uri,
+            "cleaned_s3_uri": cleaned_data_s3_uri,
+            "curated_features_s3_uri": curated_features_s3_uri,
+            "feature_lineage_s3_uri": feature_lineage_s3_uri,
+        },
         "preprocessing_metadata_s3_uri": preprocessing_metadata_s3_uri,
         "objective_metric_name": objective_metric_name,
         "objective_metric_value": objective_metric_value,

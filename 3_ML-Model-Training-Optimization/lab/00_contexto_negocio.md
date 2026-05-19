@@ -77,6 +77,17 @@ Rutas importantes:
 | Modulo que imprime el paso | `src/lab_runner.py` |
 | Archivo de lectura del paso | `lab/00_contexto_negocio.md` |
 
+## Scripts y parametros principales
+
+Este paso no ejecuta servicios AWS. Los archivos relevantes son:
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar el orden o los modulos de cada paso | `src/lab_runner.py` |
+| Cambiar el wrapper Bash general | `scripts/lab.sh` |
+| Cambiar el contenido conceptual del paso | `lab/00_contexto_negocio.md` |
+| Ver el mapa completo de scripts e inputs/outputs | `lab/14_workflow_and_scripts_reference.md` |
+
 ## Resultado esperado
 
 La terminal imprime el encabezado del paso. No se crean recursos AWS, archivos locales ni objetos S3.

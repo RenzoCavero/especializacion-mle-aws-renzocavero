@@ -53,10 +53,23 @@ Los servicios Glue Crawler, Glue Data Quality y Glue Data Catalog Column Statist
 
 ## Como Se Ejecuta
 
-Comando recomendado:
+Comando recomendado para ejecutar todo el pipeline cloud en una sola corrida Glue:
 
 ```bash
 bash scripts/run_processing_job.sh all
+```
+
+Comando del paso numerado para generar solo la capa `cleaned/` y `curated/`:
+
+```bash
+bash scripts/lab.sh step 05
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\run_processing_job.ps1 -Steps all
+.\scripts\lab.ps1 step 05
 ```
 
 Ese script ejecuta localmente:
@@ -88,6 +101,19 @@ y llama a:
 ```text
 src.pipeline.run_pipeline
 ```
+
+## Rutas De Ejecucion
+
+| Nivel | Ruta |
+|---|---|
+| Runner numerado | `scripts/lab.sh step 05` o `scripts/lab.ps1 step 05` |
+| Script directo | `scripts/run_processing_job.sh <steps>` o `scripts/run_processing_job.ps1 -Steps <steps>` |
+| Modulo local que inicia el Glue Job | `src.run_processing_job` |
+| Empaquetado de codigo | `src.package_job_assets` |
+| Script remoto configurado en Glue | `s3://<bucket>/scripts/glue_pipeline.py` |
+| Paquete remoto de soporte | `s3://<bucket>/scripts/ml_data_prep_src.zip` |
+| Orquestador del pipeline | `src.pipeline.run_pipeline` |
+| Modulos de transformacion | `src.clean_data`, `src.transform_data`, `src.feature_engineering`, `src.build_training_dataset`, `src.build_inference_dataset` |
 
 ## Parametros Que Recibe El Job
 
@@ -1128,6 +1154,17 @@ Si el job falla, revisa:
 - Permisos del rol Glue para S3, Glue Catalog y CloudWatch Logs.
 - Existencia de `raw/` y `scripts/` en el bucket.
 
+## Validacion En AWS Console
+
+1. Abre AWS Glue.
+2. Ve a ETL jobs.
+3. Abre `ml-data-prep-lab-processing-job`.
+4. Entra a `Runs`.
+5. Selecciona el ultimo run y confirma que el estado sea `Succeeded`.
+6. Abre los logs de CloudWatch desde el run o desde CloudWatch > Log groups.
+7. Busca mensajes como `Pipeline finished successfully`, `Wrote cleaned/ and curated/ datasets`, `Wrote features/training_features.csv` o `Wrote dataset card`.
+8. Abre Amazon S3 y revisa que los prefijos esperados tengan archivos con tamano mayor a cero.
+
 ## Por Que Usar `all`
 
 Para una corrida normal:
@@ -1213,7 +1250,7 @@ Buenas practicas para esa version:
 - Orquestar dependencias con Glue Workflows o Step Functions si hay varios jobs.
 - Para cargas incrementales, evaluar Glue Job Bookmarks y particiones.
 
-Decision del laboratorio: no implementar tres Glue Jobs todavia. El codigo ya esta modularizado por etapas y el parametro `--pipeline-steps` permite ensenar los limites logicos sin multiplicar infraestructura ni costo. Una extension futura puede convertir estos pasos en jobs separados y orquestarlos como DAG.
+Decision del laboratorio: no implementar tres Glue Jobs todavia. El codigo ya esta modularizado por etapas y el parametro `--pipeline-steps` permite ver los limites logicos sin multiplicar infraestructura ni costo. Una extension futura puede convertir estos pasos en jobs separados y orquestarlos como DAG.
 
 Referencias AWS utiles para esta decision:
 

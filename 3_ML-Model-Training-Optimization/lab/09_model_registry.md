@@ -20,6 +20,8 @@ PendingManualApproval
 
 Tambien vas a generar reportes y metadata de features.
 
+Este paso no crea un endpoint y no aprovisiona compute. El modelo queda registrado para revision. Si despues quieres verlo como modelo deployable en Studio, ejecuta el comando opcional de aprobacion descrito mas abajo.
+
 ## Conceptos clave
 
 - Model Registry: componente de SageMaker para versionar modelos y controlar aprobaciones.
@@ -81,6 +83,76 @@ Mapa practico:
 | Solicitudes en cola, payloads grandes o procesamiento mas largo con latencia cercana a tiempo real | Asynchronous Inference |
 | Trafico intermitente sin administrar capacidad fija | Serverless Inference |
 
+## Aprobacion humana y automatizacion de despliegue
+
+En produccion, aprobar un Model Package no deberia desplegar automaticamente por si solo. La aprobacion humana es un gate de gobierno:
+
+```text
+PendingManualApproval
+  -> revision humana de metricas, linaje, riesgos y model card
+  -> Approved
+  -> evento de SageMaker
+  -> pipeline de despliegue
+```
+
+Cuando una persona cambia el estado del Model Package a `Approved`, SageMaker emite un evento en Amazon EventBridge. EventBridge no observa la pantalla de Studio; recibe el cambio del servicio SageMaker.
+
+Un patron de regla EventBridge para capturar la aprobacion seria:
+
+```json
+{
+  "source": ["aws.sagemaker"],
+  "detail-type": ["SageMaker Model Package State Change"],
+  "detail": {
+    "ModelPackageGroupName": ["churn-model-package-group"],
+    "ModelApprovalStatus": ["Approved"]
+  }
+}
+```
+
+El evento incluye informacion del Model Package, por ejemplo el ARN, el grupo, la version y el nuevo estado. Con ese ARN, puedes iniciar un workflow de despliegue.
+
+### Orquestacion vs logica de despliegue
+
+No es lo mismo orquestar que ejecutar la logica de despliegue:
+
+| Capa | Servicio tipico | Responsabilidad |
+|---|---|---|
+| Deteccion de evento | Amazon EventBridge | Detectar que un Model Package cambio a `Approved`. |
+| Orquestacion | AWS CodePipeline, AWS Step Functions o SageMaker Pipelines | Definir la secuencia: deploy staging, pruebas, aprobacion final, deploy prod, rollback. |
+| Logica de despliegue | AWS CodeBuild, AWS Lambda, scripts Python, CDK o Terraform | Ejecutar llamadas concretas como `CreateModel`, `CreateEndpointConfig`, `UpdateEndpoint` o `CreateTransformJob`. |
+
+Ejemplo de flujo productivo:
+
+```text
+Human approves Model Package
+  -> EventBridge rule matches ModelApprovalStatus=Approved
+  -> CodePipeline or Step Functions starts
+  -> Create SageMaker Model
+  -> Deploy/update staging endpoint
+  -> Run smoke tests
+  -> Optional manual approval for production
+  -> Update production endpoint or run Batch Transform
+  -> Notify result
+```
+
+Para real-time, la logica de despliegue normalmente llama:
+
+```text
+CreateModel
+CreateEndpointConfig
+CreateEndpoint or UpdateEndpoint
+```
+
+Para batch, puede no crear endpoint. Puede llamar directamente:
+
+```text
+CreateModel
+CreateTransformJob
+```
+
+`Models > Deployable models` representa metadata lista para desplegar. No significa que exista un endpoint sirviendo trafico. El trafico empieza cuando se crea o actualiza un endpoint, o cuando se ejecuta un Batch Transform Job.
+
 ## Prerrequisitos
 
 1. Ejecuta desde:
@@ -139,6 +211,43 @@ python -m src.model_card
 
 Importante: `scripts/register_best_model.sh` y `.ps1` ejecutan comparacion, registro y exportacion de metadata, pero no generan `training_report.md` ni `model_card.md`. Si usas esos wrappers, ejecuta los dos comandos Python adicionales.
 
+### Comando opcional: aprobar y crear modelo deployable
+
+Despues de revisar metricas y reportes, puedes aprobar la version registrada y crear un recurso `SageMaker Model` a partir del Model Package:
+
+```bash
+python -m src.approve_model
+```
+
+Con Bash o Git Bash:
+
+```bash
+bash scripts/approve_model.sh
+```
+
+En Windows PowerShell:
+
+```powershell
+.\scripts\approve_model.ps1
+```
+
+Este comando hace dos cosas:
+
+1. Cambia el `ModelApprovalStatus` del Model Package a `Approved`.
+2. Crea un `SageMaker Model` con nombre similar a:
+
+   ```text
+   ml-training-opt-lab-deployable-v<version>
+   ```
+
+Crear un `SageMaker Model` no crea un endpoint y no empieza a cobrar por instancia. Es metadata deployable: queda listo para que luego puedas crear un endpoint real-time o un Batch Transform Job.
+
+Si solo quieres aprobar el Model Package, sin crear el recurso deployable:
+
+```bash
+python -m src.approve_model --skip-create-model
+```
+
 Rutas importantes:
 
 | Tipo | Ruta |
@@ -146,11 +255,26 @@ Rutas importantes:
 | Wrapper Bash | `scripts/register_best_model.sh` |
 | Wrapper PowerShell | `scripts/register_best_model.ps1` |
 | Modulo que registra el Model Package | `src/register_model.py` |
+| Modulo que aprueba y crea SageMaker Model deployable | `src/approve_model.py` |
 | Modulo que exporta contrato de features | `src/export_feature_metadata.py` |
 | Modulo que genera reporte de training | `src/training_report.py` |
 | Modulo que genera model card local | `src/model_card.py` |
 | Codigo de inferencia empaquetado para despliegues futuros | `training/inference.py` |
 | Archivo que se sube a S3 como source de inferencia | `artifacts/local_outputs/inference_source.tar.gz` |
+
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar seleccion del modelo antes de registrar | `src/compare_models.py` |
+| Cambiar como se crea el Model Package | `src/register_model.py` |
+| Cambiar imagen, source de inferencia o metadata de contenedor | `src/register_model.py`, `training/inference.py` |
+| Cambiar contrato de features exportado | `src/export_feature_metadata.py`, `src/feature_schema.py` |
+| Cambiar reporte de entrenamiento | `src/training_report.py` |
+| Cambiar model card | `src/model_card.py` |
+| Cambiar aprobacion y creacion de SageMaker Model deployable | `src/approve_model.py` |
+| Cambiar nombre del Model Package Group | `.env`, `.env.example`, `src/config.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
 
 ## Resultado esperado
 
@@ -173,6 +297,12 @@ artifacts/local_outputs/model_card.md
 artifacts/local_outputs/run_state.json
 ```
 
+Si ejecutas `python -m src.approve_model`, tambien se genera:
+
+```text
+artifacts/local_outputs/approved_model.json
+```
+
 `run_state.json` debe incluir:
 
 - `model_package_arn`.
@@ -180,6 +310,8 @@ artifacts/local_outputs/run_state.json
 - `model_approval_status`.
 - `inference_source_s3_uri`.
 - `feature_contract_s3_uri`.
+- `deployable_model_name`, si ejecutaste `python -m src.approve_model`.
+- `deployable_model_arn`, si ejecutaste `python -m src.approve_model`.
 
 ## Validacion local
 
@@ -206,12 +338,71 @@ artifacts/local_outputs/run_state.json
 12. Ve a S3 > `model_registry_metadata/` y confirma `feature_contract.json`.
 13. Ve a S3 > `reports/` y confirma `training_report.md` y `model_card.md`.
 
+Si ejecutaste `python -m src.approve_model`:
+
+1. En la version del Model Package, verifica `Approval status = Approved`.
+2. Ve a SageMaker Studio > `Models`.
+3. Abre `Deployable models`.
+4. Busca `ml-training-opt-lab-deployable-v<version>`.
+5. Confirma que aparece como modelo deployable.
+6. No presiones `Deploy` a menos que quieras crear un endpoint y asumir costo de compute.
+
+Si no aparece en `Deployable models`, valida por CLI:
+
+```bash
+aws sagemaker list-models \
+  --name-contains ml-training-opt-lab \
+  --region <AWS_REGION>
+```
+
+## Evaluacion visible en Studio
+
+El paso 09 registra `ModelMetrics` apuntando al JSON de metricas generado por los Processing Jobs de evaluacion. En la version del modelo deberias ver `Evaluate: Complete` si Studio puede leer esas metricas.
+
+Si quieres agregar collaterals de evaluacion manualmente desde la UI:
+
+1. Abre SageMaker Studio.
+2. Ve a `Models` o `Registry`.
+3. Abre `Churn Model Package Group`.
+4. Entra a la version registrada.
+5. Abre la pestana `Evaluate`.
+6. Selecciona `Add` > `S3`, si la opcion esta disponible.
+7. Usa una de estas rutas:
+
+   ```text
+   s3://<S3_BUCKET>/evaluation/baseline/
+   s3://<S3_BUCKET>/evaluation/optimized/
+   ```
+
+Esto no es lo mismo que `Jobs > Model evaluation`. Esa seccion de Studio muestra evaluaciones administradas creadas por el servicio o por el wizard de Studio. Para este modelo tabular de `scikit-learn`, la evaluacion del lab queda trazada como Processing Job, metricas en S3 y ModelMetrics en Model Registry.
+
 ## Validacion opcional por CLI
 
 ```bash
 aws sagemaker list-model-packages \
   --model-package-group-name churn-model-package-group \
   --profile <AWS_PROFILE> \
+  --region <AWS_REGION>
+```
+
+Para confirmar aprobacion y tipos soportados:
+
+```bash
+aws sagemaker describe-model-package \
+  --model-package-name <MODEL_PACKAGE_ARN> \
+  --region <AWS_REGION> \
+  --query "{
+    Approval: ModelApprovalStatus,
+    Realtime: InferenceSpecification.SupportedRealtimeInferenceInstanceTypes,
+    BatchTransform: InferenceSpecification.SupportedTransformInstanceTypes
+  }"
+```
+
+Para confirmar el modelo deployable:
+
+```bash
+aws sagemaker describe-model \
+  --model-name <DEPLOYABLE_MODEL_NAME> \
   --region <AWS_REGION>
 ```
 
@@ -224,6 +415,8 @@ aws sagemaker list-model-packages \
 | `Tags are not supported in Model Package versions` | Version anterior del codigo agregaba tags al package. | Usa la version actual de `src.register_model.py`; no modifiques docs para agregar tags a versiones. |
 | Model Package Group no aparece | Region incorrecta o fallo de permisos. | Verifica `AWS_REGION` y permisos SageMaker. |
 | Studio muestra `Audit: Draft` | El model card/gobernanza no fue aprobado desde la UI. | Es esperado en el laboratorio. Revisa `reports/model_card.md` y actualiza el audit manualmente si el ejercicio lo requiere. |
+| No ves el modelo en `Deployable models` | Solo ejecutaste `src.register_model`; eso registra un Model Package, pero no crea un `SageMaker Model`. | Ejecuta `python -m src.approve_model` y refresca Studio. |
+| `Deploy` sigue deshabilitado | El Model Package aun esta en `PendingManualApproval` o falta un `SageMaker Model`. | Ejecuta `python -m src.approve_model` y valida `Approval=Approved` por CLI. |
 | No aparece `Near-real-time` como modo | SageMaker lo implementa normalmente con Asynchronous Inference, no como fila separada de esta tabla. | Documentalo como opcion futura y configuralo en el endpoint con `AsyncInferenceConfig` cuando construyas inferencia asincrona. |
 
 ## Conexion con despliegues futuros
