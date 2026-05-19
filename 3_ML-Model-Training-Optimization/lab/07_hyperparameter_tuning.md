@@ -134,6 +134,20 @@ Rutas importantes:
 | Codigo remoto usado para evaluacion | `processing/evaluation_entrypoint.py` |
 | Modulo local que compara baseline vs optimized | `src/compare_models.py` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar rangos de HPO standalone | `src/submit_hpo_job.py` |
+| Cambiar rangos de HPO dentro del Pipeline opcional | `src/create_hpo_pipeline.py` |
+| Cambiar cantidad de trials o paralelismo | `.env`, `.env.example`, `src/config.py` (`HPO_MAX_JOBS`, `HPO_MAX_PARALLEL_JOBS`) |
+| Cambiar metrica objetivo | `src/submit_hpo_job.py`, `src/create_hpo_pipeline.py`, `training/train.py`, `src/submit_training_job.py` |
+| Cambiar algoritmo entrenado por cada trial | `training/train.py` |
+| Cambiar criterio de comparacion baseline vs optimized | `src/compare_models.py` |
+| Cambiar evaluacion del modelo optimizado | `src/evaluate_model.py`, `processing/evaluation_entrypoint.py` |
+| Cambiar demo opcional de Autopilot | `src/submit_autopilot_job.py`, `.env` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
+
 ## Resultado esperado
 
 S3:
@@ -215,11 +229,13 @@ Es valido que el baseline gane en test aunque HPO haya encontrado un mejor model
 
 HPO ejecuta multiples Training Jobs. Cada trial consume instancia de SageMaker. Mantener `HPO_MAX_JOBS` bajo es intencional para controlar costo en cuentas de estudiantes.
 
-## Opcional: comparar con SageMaker Autopilot
+## Opcional: demo minima con SageMaker Autopilot
 
 SageMaker Autopilot, tambien llamado AutoML, automatiza parte del ciclo de modelado: analiza un dataset tabular, genera candidatos, entrena modelos y produce un ranking de candidatos. No reemplaza necesariamente al pipeline MLOps, pero sirve como benchmark rapido o como exploracion inicial.
 
 En este repositorio hay un comando opcional. No forma parte de `bash scripts/lab.sh all` para evitar costos extra.
+
+La configuracion default es intencionalmente pequena. El objetivo no es encontrar el mejor modelo con AutoML, sino que veas donde aparece el job, como se ve el leaderboard de candidatos y que artefactos genera SageMaker.
 
 Con Bash o Git Bash:
 
@@ -255,16 +271,52 @@ El script crea un AutoML Job V2 usando:
 | Problema | `BinaryClassification` |
 | Objetivo | `F1` |
 | Modo | `AUTOPILOT_MODE`, default `ENSEMBLING` |
-| Max candidatos | `AUTOPILOT_MAX_CANDIDATES`, default `3` |
+| Algoritmos | `AUTOPILOT_ALGORITHMS`, default `linear-learner,xgboost` |
+| Max candidatos | `AUTOPILOT_MAX_CANDIDATES`, default `2` |
+| Runtime maximo del job | `AUTOPILOT_MAX_RUNTIME_SECONDS`, default `900` segundos |
 | Output | `s3://<S3_BUCKET>/automl/output/` |
+
+La seleccion `linear-learner,xgboost` limita Autopilot a dos familias de algoritmos tabulares comunes. Segun la API de SageMaker, Autopilot permite seleccionar un subconjunto de algoritmos mediante `CandidateGenerationConfig.AlgorithmsConfig`. En modo `ENSEMBLING`, algoritmos como `linear-learner` y `xgboost` son validos para tabular.
+
+Si cambias `AUTOPILOT_MODE=AUTO`, el script omite la seleccion manual de algoritmos y deja que SageMaker decida el modo y los candidatos.
 
 Validacion visual:
 
 1. Abre Amazon SageMaker AI.
 2. Ve a AutoML o Autopilot, segun la vista disponible en tu consola.
 3. Busca el job con nombre similar a `ml-training-automl-<timestamp>`.
-4. Revisa estado, candidatos generados y best candidate.
-5. Revisa S3 > `<S3_BUCKET>` > `automl/output/`.
+4. Revisa `Status`.
+5. Abre el job y revisa el candidate leaderboard.
+6. Revisa los algoritmos o candidate definitions generados.
+7. Si el job termino, revisa `Best candidate`.
+8. Revisa S3 > `<S3_BUCKET>` > `automl/output/`.
+
+Tambien puedes validar por CLI:
+
+```bash
+aws sagemaker list-auto-ml-jobs \
+  --region <AWS_REGION> \
+  --sort-by CreationTime \
+  --sort-order Descending
+```
+
+Y describir el job:
+
+```bash
+aws sagemaker describe-auto-ml-job-v2 \
+  --auto-ml-job-name <AUTOPILOT_JOB_NAME> \
+  --region <AWS_REGION>
+```
+
+Que puedes hacer con el resultado:
+
+| Accion | Para que sirve |
+|---|---|
+| Ver leaderboard | Entender que candidatos probo Autopilot y como se comparan. |
+| Revisar best candidate | Inspeccionar el candidato que mejor optimizo `F1`. |
+| Revisar artefactos en S3 | Ver salidas y metadata generadas por AutoML. |
+| Crear modelo desde la UI | Probar como SageMaker convierte un candidato en un modelo desplegable. |
+| Replicar manualmente | Tomar una idea prometedora y llevarla a codigo controlado dentro del pipeline MLOps. |
 
 Usalo como comparacion educativa:
 
@@ -272,7 +324,7 @@ Usalo como comparacion educativa:
 Baseline propio -> HPO propio -> Autopilot opcional
 ```
 
-En produccion, si Autopilot encuentra un enfoque prometedor, revisa su candidate definition, replica lo necesario como codigo controlado y registralo con los mismos gates de evaluacion y gobierno.
+En produccion, no despliegues automaticamente el resultado de Autopilot solo porque obtuvo buen score. Si encuentra un enfoque prometedor, revisa su candidate definition, replica lo necesario como codigo controlado y registralo con los mismos gates de evaluacion, seguridad y gobierno.
 
 ## Problemas comunes y como resolverlos
 

@@ -41,10 +41,13 @@ def main() -> None:
     configure_logging()
     config = get_config()
     config.require_aws_fields()
-    if not config.raw_data_local_path.exists():
-        raise FileNotFoundError("Run python -m src.generate_sample_data before ingesting features.")
+    input_path = config.curated_features_local_path if config.curated_features_local_path.exists() else config.raw_data_local_path
+    if not input_path.exists():
+        raise FileNotFoundError(
+            "Run python -m src.generate_sample_data and python -m src.prepare_feature_sources before ingesting features."
+        )
 
-    df = pd.read_csv(config.raw_data_local_path)
+    df = pd.read_csv(input_path)
     validate_records_columns(list(df.columns))
     if args.limit:
         df = df.head(args.limit)
@@ -56,13 +59,13 @@ def main() -> None:
             LOGGER.info("Ingested %s records", index + 1)
             time.sleep(0.2)
 
-    upload_file(config, str(config.raw_data_local_path), config.feature_snapshot_s3_uri)
+    upload_file(config, str(input_path), config.feature_snapshot_s3_uri)
     update_state(
         ingested_records=int(len(df)),
         feature_snapshot_s3_uri=config.feature_snapshot_s3_uri,
         sample_customer_id=str(df.iloc[0]["customer_id"]),
     )
-    LOGGER.info("Ingested %s records into %s", len(df), config.feature_group_name)
+    LOGGER.info("Ingested %s records from %s into %s", len(df), input_path, config.feature_group_name)
     LOGGER.info("Feature snapshot for Processing Job available at %s", config.feature_snapshot_s3_uri)
 
 

@@ -21,13 +21,8 @@ def main() -> None:
         )
 
     upload_file(config, str(config.raw_data_local_path), config.raw_data_s3_uri)
-    upload_file(config, str(config.raw_data_local_path), config.feature_snapshot_s3_uri)
-    update_state(
-        raw_data_s3_uri=config.raw_data_s3_uri,
-        feature_snapshot_s3_uri=config.feature_snapshot_s3_uri,
-    )
+    update_state(raw_data_s3_uri=config.raw_data_s3_uri)
     LOGGER.info("Uploaded raw data to %s", config.raw_data_s3_uri)
-    LOGGER.info("Uploaded processing feature snapshot to %s", config.feature_snapshot_s3_uri)
 
 
 if __name__ == "__main__":

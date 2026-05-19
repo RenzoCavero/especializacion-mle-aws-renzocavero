@@ -45,6 +45,52 @@ s3://<S3_BUCKET>/output/baseline/<training-job>/output/model.tar.gz
 - Metric definitions: expresiones que SageMaker usa para extraer metricas desde logs.
 - Offline Store indirecto: patron donde Feature Store alimenta un dataset historico mediante Processing/Athena, y el Training Job consume el resultado en S3.
 
+## Donde queda el preprocesamiento del modelo
+
+En este laboratorio, el one-hot encoding ocurre antes del Training Job, dentro del Processing Job del paso 04:
+
+```text
+Feature Store Offline Store
+  -> Athena
+  -> Processing Job
+  -> one-hot encoding
+  -> train.csv / validation.csv / test.csv
+  -> Training Job
+```
+
+El Training Job recibe columnas ya numericas. Luego `training/train.py` entrena un `sklearn.pipeline.Pipeline` que contiene:
+
+```text
+StandardScaler -> LogisticRegression
+```
+
+El artefacto `model.joblib` guarda:
+
+- El pipeline `StandardScaler + LogisticRegression`.
+- La lista `feature_columns` que el modelo espera.
+- Metricas de validacion.
+
+Importante: el one-hot encoder no queda guardado como objeto dentro del modelo actual. Queda aplicado en los CSVs generados por Processing. Por eso, si en inferencia envias datos crudos con columnas como `plan_type`, `country` y `device_type`, necesitas aplicar la misma transformacion antes de invocar el modelo.
+
+Opciones comunes para produccion:
+
+| Opcion | Como funciona | Cuando usarla |
+|---|---|---|
+| Preprocesamiento dentro del artefacto del modelo | Entrenar un `sklearn Pipeline` con `ColumnTransformer`/`OneHotEncoder` y guardar todo en `model.joblib`. | Recomendado cuando quieres que el endpoint reciba datos crudos y el modelo se encargue de transformar. |
+| Preprocesamiento en `inference.py` | El script de inferencia recibe JSON/CSV crudo, aplica one-hot encoding y ordena columnas antes de llamar al modelo. | Util cuando el preprocesamiento es simple y quieres mantener una sola imagen de inferencia. |
+| SageMaker Inference Pipeline | Un contenedor transforma datos y otro contenedor ejecuta el modelo. | Util cuando el preprocesamiento es pesado o se comparte entre varios modelos. |
+| Preprocesamiento upstream | Batch job, streaming job o aplicacion cliente envia al endpoint columnas ya codificadas. | Util en batch inference o cuando ya tienes una capa de feature serving controlada. |
+
+Para este laboratorio educativo, la opcion elegida mantiene visible el flujo de datos:
+
+```text
+Processing = preparar dataset
+Training = entrenar modelo
+Inference futura = reutilizar contrato de features y aplicar la misma transformacion
+```
+
+En un sistema productivo, la opcion mas robusta suele ser guardar el encoder junto con el modelo o incluir la transformacion en el codigo de inferencia. Asi reduces el riesgo de training-serving skew, es decir, diferencias entre como transformas datos al entrenar y como los transformas al predecir.
+
 ## Prerrequisitos
 
 1. Ejecuta desde:
@@ -118,6 +164,20 @@ Hiperparametros baseline:
 | `max-iter` | `250` |
 | `class-weight` | `balanced` |
 | `random-state` | `42` |
+
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar como se envia el Training Job | `src/submit_training_job.py` |
+| Cambiar hiperparametros baseline standalone | `src/submit_training_job.py`, funcion `build_estimator` |
+| Cambiar hiperparametros baseline dentro del Pipeline | `src/create_pipeline.py` |
+| Cambiar algoritmo o pipeline scikit-learn | `training/train.py` |
+| Cambiar dependencias del contenedor de training | `training/requirements.txt` |
+| Cambiar carga de `train.csv` y `validation.csv` | `training/utils.py` |
+| Cambiar metricas capturadas por SageMaker | `src/submit_training_job.py`, constante `METRIC_DEFINITIONS`, y los `print()` en `training/train.py` |
+| Cambiar instancia o fallbacks de Training | `.env`, `.env.example`, `src/config.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
 
 ## Resultado esperado
 

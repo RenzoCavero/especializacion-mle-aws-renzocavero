@@ -50,6 +50,13 @@ def env_int(name: str, default: int) -> int:
     return int(value)
 
 
+def env_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
 def s3_join(bucket: str, *parts: str) -> str:
     clean = [part.strip("/") for part in parts if part and part.strip("/")]
     suffix = "/".join(clean)
@@ -95,9 +102,11 @@ class AppConfig:
     allow_feature_snapshot_fallback: bool
     offline_store_max_wait_seconds: int
     offline_store_poll_seconds: int
+    processing_ingest_feature_store: bool
     autopilot_max_candidates: int
     autopilot_max_runtime_seconds: int
     autopilot_mode: str
+    autopilot_algorithms: tuple[str, ...]
 
     @property
     def raw_data_local_path(self) -> Path:
@@ -106,6 +115,18 @@ class AppConfig:
     @property
     def sample_data_local_path(self) -> Path:
         return PROJECT_ROOT / "data" / "sample" / "churn_sample.csv"
+
+    @property
+    def cleaned_data_local_path(self) -> Path:
+        return PROJECT_ROOT / "data" / "local_cache" / "churn_cleaned.csv"
+
+    @property
+    def curated_features_local_path(self) -> Path:
+        return PROJECT_ROOT / "data" / "local_cache" / "churn_features_curated.csv"
+
+    @property
+    def feature_lineage_local_path(self) -> Path:
+        return PROJECT_ROOT / "artifacts" / "local_outputs" / "feature_lineage.json"
 
     @property
     def local_outputs_dir(self) -> Path:
@@ -122,6 +143,18 @@ class AppConfig:
     @property
     def feature_snapshot_s3_uri(self) -> str:
         return s3_join(self.s3_bucket_name, "processing", "input", "churn_features.csv")
+
+    @property
+    def cleaned_data_s3_uri(self) -> str:
+        return s3_join(self.s3_bucket_name, "cleaned", "churn_cleaned.csv")
+
+    @property
+    def curated_features_s3_uri(self) -> str:
+        return s3_join(self.s3_bucket_name, "curated", "churn_features.csv")
+
+    @property
+    def feature_lineage_s3_uri(self) -> str:
+        return s3_join(self.s3_bucket_name, "lineage", "feature_lineage.json")
 
     @property
     def athena_query_results_s3_uri(self) -> str:
@@ -172,6 +205,10 @@ class AppConfig:
         return f"{self.resource_prefix}-pipeline"
 
     @property
+    def hpo_pipeline_name(self) -> str:
+        return f"{self.resource_prefix}-hpo-pipeline"
+
+    @property
     def processing_instance_candidates(self) -> tuple[str, ...]:
         return unique_instance_types(self.processing_instance_type, self.processing_instance_type_fallbacks)
 
@@ -203,6 +240,8 @@ class AppConfig:
             "s3_bucket_name": self.s3_bucket_name,
             "feature_group_name": self.feature_group_name,
             "model_package_group_name": self.model_package_group_name,
+            "pipeline_name": self.pipeline_name,
+            "hpo_pipeline_name": self.hpo_pipeline_name,
             "enable_online_store": self.enable_online_store,
             "enable_offline_store": self.enable_offline_store,
             "processing_instance_type": self.processing_instance_type,
@@ -215,9 +254,11 @@ class AppConfig:
             "allow_feature_snapshot_fallback": self.allow_feature_snapshot_fallback,
             "offline_store_max_wait_seconds": self.offline_store_max_wait_seconds,
             "offline_store_poll_seconds": self.offline_store_poll_seconds,
+            "processing_ingest_feature_store": self.processing_ingest_feature_store,
             "autopilot_max_candidates": self.autopilot_max_candidates,
             "autopilot_max_runtime_seconds": self.autopilot_max_runtime_seconds,
             "autopilot_mode": self.autopilot_mode,
+            "autopilot_algorithms": list(self.autopilot_algorithms),
             "wait_for_jobs": self.wait_for_jobs,
             "kms_key_arn_configured": bool(self.kms_key_arn),
         }
@@ -262,7 +303,9 @@ def get_config() -> AppConfig:
         allow_feature_snapshot_fallback=env_bool("ALLOW_FEATURE_SNAPSHOT_FALLBACK", True),
         offline_store_max_wait_seconds=env_int("OFFLINE_STORE_MAX_WAIT_SECONDS", 900),
         offline_store_poll_seconds=env_int("OFFLINE_STORE_POLL_SECONDS", 60),
-        autopilot_max_candidates=env_int("AUTOPILOT_MAX_CANDIDATES", 3),
-        autopilot_max_runtime_seconds=env_int("AUTOPILOT_MAX_RUNTIME_SECONDS", 1800),
+        processing_ingest_feature_store=env_bool("PROCESSING_INGEST_FEATURE_STORE", True),
+        autopilot_max_candidates=env_int("AUTOPILOT_MAX_CANDIDATES", 2),
+        autopilot_max_runtime_seconds=env_int("AUTOPILOT_MAX_RUNTIME_SECONDS", 900),
         autopilot_mode=os.getenv("AUTOPILOT_MODE", "ENSEMBLING").strip().upper(),
+        autopilot_algorithms=env_list("AUTOPILOT_ALGORITHMS", ("linear-learner", "xgboost")),
     )

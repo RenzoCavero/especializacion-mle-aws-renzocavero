@@ -24,6 +24,8 @@ def main() -> None:
             "hpo_max_jobs": config.hpo_max_jobs,
             "hpo_max_parallel_jobs": config.hpo_max_parallel_jobs,
             "autopilot_max_candidates": config.autopilot_max_candidates,
+            "autopilot_max_runtime_seconds": config.autopilot_max_runtime_seconds,
+            "autopilot_algorithms": list(config.autopilot_algorithms),
             "online_store_enabled": config.enable_online_store,
             "offline_store_s3_uri": config.offline_store_s3_uri,
             "no_persistent_endpoints_expected": True,

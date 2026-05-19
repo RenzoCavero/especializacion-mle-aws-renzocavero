@@ -34,6 +34,9 @@ def main() -> None:
             lambda: sm.describe_feature_group(FeatureGroupName=config.feature_group_name),
         ),
         "s3_raw": safe_call("s3_raw", lambda: list_s3_keys(config, f"s3://{config.s3_bucket_name}/raw/", 5)),
+        "s3_cleaned": safe_call("s3_cleaned", lambda: list_s3_keys(config, f"s3://{config.s3_bucket_name}/cleaned/", 5)),
+        "s3_curated": safe_call("s3_curated", lambda: list_s3_keys(config, f"s3://{config.s3_bucket_name}/curated/", 5)),
+        "s3_lineage": safe_call("s3_lineage", lambda: list_s3_keys(config, f"s3://{config.s3_bucket_name}/lineage/", 5)),
         "s3_train": safe_call("s3_train", lambda: list_s3_keys(config, config.train_s3_uri, 5)),
         "s3_reports": safe_call("s3_reports", lambda: list_s3_keys(config, config.reports_s3_uri, 10)),
         "model_packages": safe_call(
@@ -50,10 +53,10 @@ def main() -> None:
         "ok": not endpoints,
         "result": "No SageMaker endpoints found for lab prefix." if not endpoints else endpoints,
     }
-    for key in ("processing_job_name", "baseline_training_job_name", "hpo_job_name"):
+    for key in ("feature_ingestion_job_name", "processing_job_name", "baseline_training_job_name", "hpo_job_name"):
         if state.get(key):
             job_name = state[key]
-            if key == "processing_job_name":
+            if key in {"feature_ingestion_job_name", "processing_job_name"}:
                 validations[key] = safe_call(key, lambda job_name=job_name: sm.describe_processing_job(ProcessingJobName=job_name))
             elif key == "baseline_training_job_name":
                 validations[key] = safe_call(key, lambda job_name=job_name: sm.describe_training_job(TrainingJobName=job_name))

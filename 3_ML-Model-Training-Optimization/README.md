@@ -9,7 +9,7 @@ El flujo usa:
 - Amazon S3 para datos, codigo, metricas, reportes y artefactos.
 - SageMaker Feature Store con Online Store y Offline Store.
 - Amazon Athena y AWS Glue Data Catalog para materializar datasets desde Offline Store.
-- SageMaker Processing Jobs para preparacion y evaluacion reproducibles.
+- SageMaker Processing Jobs para ingesta batch de features, preparacion y evaluacion reproducibles.
 - SageMaker Training Jobs para baseline training.
 - SageMaker Automatic Model Tuning para HPO.
 - SageMaker Autopilot como comparacion AutoML opcional.
@@ -71,9 +71,9 @@ En Windows sin `make`, tambien puedes usar:
 scripts\run_all_cloud.ps1
 ```
 
-`make all-cloud` despliega infraestructura, genera datos sinteticos, crea Feature Store, ingiere features, prepara datasets con Processing Job, entrena baseline, ejecuta HPO, evalua, compara, registra el modelo, exporta contrato de features, genera reportes y valida recursos.
+`make all-cloud` despliega infraestructura, genera datos sinteticos, organiza S3 en `raw/`, `cleaned/` y `curated/`, crea Feature Store, ingiere features con un Processing Job, prepara datasets con otro Processing Job, entrena baseline, ejecuta HPO, evalua, compara, registra el modelo, exporta contrato de features, genera reportes y valida recursos.
 
-El Processing Job prepara `train.csv`, `validation.csv` y `test.csv` desde el Offline Store mediante AWS Glue Data Catalog y Amazon Athena. El snapshot `processing/input/churn_features.csv` queda como fallback configurable para cuentas donde el Offline Store aun no haya escrito filas.
+El paso 03 usa un Processing Job para leer `curated/churn_features.csv` y actualizar Feature Store con `PutRecord`. El paso 04 usa otro Processing Job para preparar `train.csv`, `validation.csv` y `test.csv` desde el Offline Store mediante AWS Glue Data Catalog y Amazon Athena. El snapshot `processing/input/churn_features.csv` queda como fallback configurable para cuentas donde el Offline Store aun no haya escrito filas.
 
 ## Ejecutar por pasos para clase
 
@@ -95,12 +95,14 @@ make lab-11-cost
 make lab-13-next-labs
 ```
 
-Demo opcional de Autopilot despues del paso 04:
+Demo opcional minimo de Autopilot despues del paso 04:
 
 ```bash
 make autopilot
 bash scripts/run_autopilot.sh
 ```
+
+El demo usa pocos candidatos y limita los algoritmos a `linear-learner,xgboost`. Sirve para ver el AutoML Job, el candidate leaderboard y los artefactos en S3, no para reemplazar el flujo baseline/HPO del laboratorio.
 
 Equivalentes con Python:
 
@@ -234,6 +236,18 @@ aws sagemaker list-model-packages \
 ```
 
 El modelo queda en estado `PendingManualApproval`.
+
+Para aprobar la version registrada y crear un `SageMaker Model` visible como deployable metadata en Studio, sin crear endpoint:
+
+```bash
+make approve-model
+```
+
+O:
+
+```bash
+python -m src.approve_model
+```
 
 ## Contrato para futuros laboratorios
 

@@ -18,7 +18,7 @@ El reporte consulta:
 |---|---|
 | Processing Jobs | Jobs `InProgress` con prefijo del laboratorio. |
 | Training Jobs | Jobs `InProgress` con prefijo del laboratorio. |
-| HPO Jobs | Tuning Jobs `InProgress` con prefijo del laboratorio. |
+| HPO Jobs | Tuning Jobs `InProgress` con prefijo del laboratorio, incluyendo el Pipeline opcional con HPO. |
 | Autopilot Jobs | AutoML Jobs `InProgress` si ejecutaste el demo opcional. |
 | Endpoints | Que no existan endpoints persistentes del laboratorio. |
 | S3 | Muestra de reportes, metricas y metadata. |
@@ -26,7 +26,7 @@ El reporte consulta:
 
 ## Conceptos clave
 
-- Costo de compute: instancias usadas por Processing, Training y HPO.
+- Costo de compute: instancias usadas por Processing, Training y HPO. El laboratorio ahora usa Processing tanto para ingestar features desde `curated/` como para materializar datasets desde Offline Store.
 - Costo de almacenamiento: S3, Offline Store y CloudWatch Logs.
 - Costo de consulta: Athena cobra por datos escaneados al materializar Offline Store.
 - Feature Store Online Store: puede generar costo mientras exista.
@@ -74,6 +74,16 @@ Rutas importantes:
 | Wrapper general | `scripts/lab.sh step 11` |
 | Modulo que consulta recursos y costos operativos | `src/cost_and_resource_check.py` |
 | Archivo local generado | `artifacts/local_outputs/cost_and_resource_check.json` |
+
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar recursos revisados por el reporte | `src/cost_and_resource_check.py` |
+| Cambiar prefijos S3 inspeccionados | `src/cost_and_resource_check.py`, `src/config.py` |
+| Cambiar reglas de jobs activos | `src/cost_and_resource_check.py` |
+| Cambiar flags de cleanup/costo | `.env`, `.env.example`, `src/config.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
 
 ## Resultado esperado
 
@@ -129,7 +139,7 @@ El reporte debe mostrar:
 | Feature Store Online Store | Eliminar Feature Group al finalizar. |
 | S3 | Limpiar bucket del laboratorio. |
 | CloudWatch Logs | Configurar retencion y limpiar si aplica. |
-| Pipeline executions | Evitar `make run-pipeline` si solo necesitas la definicion. |
+| Pipeline executions | Evitar `make run-pipeline` o `make run-hpo-pipeline` si solo necesitas la definicion. El Pipeline HPO crea varios Training Jobs hijos. |
 
 ## Problemas comunes y como resolverlos
 

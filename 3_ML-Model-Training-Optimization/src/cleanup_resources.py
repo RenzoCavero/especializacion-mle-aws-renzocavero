@@ -37,18 +37,22 @@ def delete_feature_group(config) -> None:
 
 def delete_pipeline(config) -> None:
     sm = client(config, "sagemaker")
-    try:
-        sm.delete_pipeline(PipelineName=config.pipeline_name)
-        LOGGER.info("Deleted Pipeline %s", config.pipeline_name)
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code")
-        if code in {"ResourceNotFound", "ValidationException"}:
-            return
-        raise
+    for pipeline_name in (config.pipeline_name, config.hpo_pipeline_name):
+        try:
+            sm.delete_pipeline(PipelineName=pipeline_name)
+            LOGGER.info("Deleted Pipeline %s", pipeline_name)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code in {"ResourceNotFound", "ValidationException"}:
+                continue
+            raise
 
 
 def delete_model_registry(config) -> None:
     sm = client(config, "sagemaker")
+    for model in sm.list_models(NameContains=config.resource_prefix, MaxResults=100).get("Models", []):
+        sm.delete_model(ModelName=model["ModelName"])
+        LOGGER.info("Deleted SageMaker Model %s", model["ModelName"])
     try:
         packages = sm.list_model_packages(ModelPackageGroupName=config.model_package_group_name, MaxResults=100)
     except ClientError as exc:

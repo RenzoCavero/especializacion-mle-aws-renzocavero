@@ -10,7 +10,7 @@ Este paso no construye recursos nuevos. Ejecuta limpieza de:
 
 | Recurso | Accion |
 |---|---|
-| SageMaker Pipeline | Eliminar `ml-training-opt-lab-pipeline`. |
+| SageMaker Pipeline | Eliminar `ml-training-opt-lab-pipeline` y, si existe, `ml-training-opt-lab-hpo-pipeline`. |
 | Model Registry | Eliminar model packages y `churn-model-package-group`. |
 | SageMaker Experiments | Eliminar Trials y Experiment. |
 | Feature Store | Solicitar eliminacion de `churn-customer-features`. |
@@ -101,6 +101,17 @@ Rutas importantes:
 | Wrapper PowerShell para cleanup local | `scripts/clean_local_outputs.ps1` |
 | Modulo de cleanup local | `src/clean_local_outputs.py` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar orden de limpieza cloud | `src/destroy_infra.py` |
+| Cambiar que recursos SageMaker se eliminan | `src/cleanup_resources.py` |
+| Cambiar que archivos locales se borran | `src/clean_local_outputs.py` |
+| Cambiar flags de cleanup | `.env`, `.env.example`, `src/config.py` |
+| Cambiar wrappers Bash/PowerShell | `scripts/destroy_infra.sh`, `scripts/destroy_infra.ps1`, `scripts/clean_local_outputs.sh`, `scripts/clean_local_outputs.ps1` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
+
 ## Limpieza de outputs locales
 
 La limpieza de AWS elimina recursos cloud. Si tambien quieres borrar artefactos locales generados por el laboratorio, usa el script local-only:
@@ -165,7 +176,7 @@ La terminal debe mostrar mensajes de eliminacion como:
 4. Confirma que desaparecio o aparece como `DELETE_COMPLETE` en historial.
 5. Ve a Amazon S3 y confirma que el bucket del laboratorio ya no existe.
 6. Ve a Amazon SageMaker > Feature Store y confirma que `churn-customer-features` no aparece.
-7. Ve a Amazon SageMaker > Pipelines y confirma que `ml-training-opt-lab-pipeline` no aparece.
+7. Ve a Amazon SageMaker > Pipelines y confirma que `ml-training-opt-lab-pipeline` y `ml-training-opt-lab-hpo-pipeline` no aparecen.
 8. Ve a Amazon SageMaker > Inference > Model Registry y confirma que `churn-model-package-group` no aparece.
 9. Ve a Amazon SageMaker > Experiments and trials y confirma que `ml-training-opt-lab-experiment` no aparece.
 10. Si ejecutaste Autopilot, ve a SageMaker Autopilot o AutoML y confirma que no haya jobs activos con prefijo del laboratorio.

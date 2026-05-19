@@ -18,6 +18,25 @@ LOGGER = logging.getLogger(__name__)
 TERMINAL_STATUSES = {"Completed", "Failed", "Stopped"}
 
 
+def build_tabular_config(config) -> dict:
+    tabular_config = {
+        "TargetAttributeName": TARGET_COLUMN,
+        "ProblemType": "BinaryClassification",
+        "Mode": config.autopilot_mode,
+        "CompletionCriteria": {
+            "MaxCandidates": config.autopilot_max_candidates,
+            "MaxAutoMLJobRuntimeInSeconds": config.autopilot_max_runtime_seconds,
+        },
+    }
+    if config.autopilot_algorithms and config.autopilot_mode != "AUTO":
+        tabular_config["CandidateGenerationConfig"] = {
+            "AlgorithmsConfig": [
+                {"AutoMLAlgorithms": list(config.autopilot_algorithms)}
+            ]
+        }
+    return tabular_config
+
+
 def wait_for_autopilot_job(config, job_name: str, poll_seconds: int = 60) -> dict:
     sm = client(config, "sagemaker")
     while True:
@@ -50,6 +69,7 @@ def main() -> None:
     job_prefix = config.resource_prefix[:11].rstrip("-")
     job_name = f"{job_prefix}-automl-{timestamp}"
     output_path = s3_join(config.s3_bucket_name, "automl", "output")
+
     request = {
         "AutoMLJobName": job_name,
         "RoleArn": config.sagemaker_execution_role_arn,
@@ -78,17 +98,7 @@ def main() -> None:
             },
         ],
         "OutputDataConfig": {"S3OutputPath": output_path},
-        "AutoMLProblemTypeConfig": {
-            "TabularJobConfig": {
-                "TargetAttributeName": TARGET_COLUMN,
-                "ProblemType": "BinaryClassification",
-                "Mode": config.autopilot_mode,
-                "CompletionCriteria": {
-                    "MaxCandidates": config.autopilot_max_candidates,
-                    "MaxAutoMLJobRuntimeInSeconds": config.autopilot_max_runtime_seconds,
-                },
-            }
-        },
+        "AutoMLProblemTypeConfig": {"TabularJobConfig": build_tabular_config(config)},
         "AutoMLJobObjective": {"MetricName": "F1"},
         "Tags": [
             {"Key": "Project", "Value": "MLModelTrainingOptimization"},
@@ -105,7 +115,9 @@ def main() -> None:
         "autopilot_input_validation_s3_uri": config.validation_s3_uri,
         "autopilot_output_s3_uri": output_path,
         "autopilot_mode": config.autopilot_mode,
+        "autopilot_algorithms": list(config.autopilot_algorithms),
         "autopilot_max_candidates": config.autopilot_max_candidates,
+        "autopilot_max_runtime_seconds": config.autopilot_max_runtime_seconds,
     }
 
     if args.wait:

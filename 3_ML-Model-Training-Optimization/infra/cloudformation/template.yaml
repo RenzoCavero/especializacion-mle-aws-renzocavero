@@ -156,6 +156,7 @@ Resources:
               - sagemaker:DescribeHyperParameterTuningJob
               - sagemaker:StopHyperParameterTuningJob
               - sagemaker:ListHyperParameterTuningJobs
+              - sagemaker:ListTrainingJobsForHyperParameterTuningJob
               - sagemaker:CreateAutoMLJob
               - sagemaker:CreateAutoMLJobV2
               - sagemaker:DescribeAutoMLJob
@@ -190,6 +191,10 @@ Resources:
               - sagemaker:DeleteModelPackage
               - sagemaker:ListModelPackages
               - sagemaker:UpdateModelPackage
+              - sagemaker:CreateModel
+              - sagemaker:DescribeModel
+              - sagemaker:DeleteModel
+              - sagemaker:ListModels
               - sagemaker:CreatePipeline
               - sagemaker:UpdatePipeline
               - sagemaker:DeletePipeline

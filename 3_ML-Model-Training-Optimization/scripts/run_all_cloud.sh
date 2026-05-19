@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 make deploy-infra
 make data
 make upload-raw
+make prepare-feature-sources
 make create-feature-group
 make ingest-features
 make validate-online-store

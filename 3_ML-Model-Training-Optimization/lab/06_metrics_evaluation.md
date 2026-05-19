@@ -93,6 +93,18 @@ Rutas importantes:
 | Librerias auxiliares montadas en el contenedor | `processing/` |
 | Artefacto de modelo evaluado | `s3://<S3_BUCKET>/output/baseline/<training-job>/output/model.tar.gz` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo |
+|---|---|
+| Cambiar como se envia el job de evaluacion | `src/evaluate_model.py` |
+| Cambiar logica de evaluacion remota | `processing/evaluation_entrypoint.py` |
+| Cambiar metricas calculadas | `processing/utils.py`, funcion `evaluate_predictions` |
+| Cambiar formato del reporte Markdown | `processing/evaluation_entrypoint.py` |
+| Evaluar un artefacto especifico | `src/evaluate_model.py` con `--model-artifact-s3-uri` |
+| Cambiar rutas S3 de `evaluation/` y `reports/` | `src/evaluate_model.py`, `src/config.py` |
+| Ver workflow completo | `lab/14_workflow_and_scripts_reference.md` |
+
 ## Resultado esperado
 
 La terminal debe mostrar:

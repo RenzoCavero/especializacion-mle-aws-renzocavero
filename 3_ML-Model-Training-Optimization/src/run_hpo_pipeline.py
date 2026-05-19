@@ -16,10 +16,10 @@ def main() -> None:
     config = get_config()
     config.require_aws_fields()
     session = sagemaker_session(config)
-    pipeline = session.sagemaker_client.describe_pipeline(PipelineName=config.pipeline_name)
-    LOGGER.info("Starting pipeline %s (%s)", config.pipeline_name, pipeline.get("PipelineArn"))
+    pipeline = session.sagemaker_client.describe_pipeline(PipelineName=config.hpo_pipeline_name)
+    LOGGER.info("Starting HPO pipeline %s (%s)", config.hpo_pipeline_name, pipeline.get("PipelineArn"))
     response = session.sagemaker_client.start_pipeline_execution(
-        PipelineName=config.pipeline_name,
+        PipelineName=config.hpo_pipeline_name,
         PipelineParameters=[
             {"Name": "InputDataS3Uri", "Value": config.feature_snapshot_s3_uri},
             {"Name": "CuratedFeaturesS3Uri", "Value": config.curated_features_s3_uri},
@@ -29,8 +29,8 @@ def main() -> None:
             {"Name": "MinF1ForRegistration", "Value": "0.50"},
         ],
     )
-    update_state(pipeline_execution_arn=response["PipelineExecutionArn"])
-    LOGGER.info("Started pipeline execution %s", response["PipelineExecutionArn"])
+    update_state(hpo_pipeline_execution_arn=response["PipelineExecutionArn"])
+    LOGGER.info("Started HPO pipeline execution %s", response["PipelineExecutionArn"])
 
 
 if __name__ == "__main__":

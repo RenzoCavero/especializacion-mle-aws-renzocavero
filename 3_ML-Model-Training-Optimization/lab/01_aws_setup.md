@@ -121,6 +121,17 @@ Rutas importantes:
 | Modulo que escribe outputs locales | `src/fetch_stack_outputs.py` |
 | Template CloudFormation enviado a AWS | `infra/cloudformation/template.yaml` |
 
+## Scripts y parametros principales
+
+| Necesidad | Archivo a modificar | Comentario |
+|---|---|---|
+| Cambiar permisos IAM del rol de SageMaker | `infra/cloudformation/template.yaml` | Agrega acciones bajo `SageMakerExecutionPolicy` solo si el laboratorio las requiere. |
+| Cambiar bucket, region, prefijo o stack | `.env`, `.env.example`, `src/config.py` | `.env` controla la ejecucion local; `src/config.py` define defaults. |
+| Cambiar como se despliega infraestructura | `src/deploy_infra.py` | Usa boto3/CloudFormation y escribe outputs al final. |
+| Cambiar como se escribe `.env.cloud` | `src/fetch_stack_outputs.py` | Lee outputs del stack y genera variables locales. |
+| Cambiar wrappers de terminal | `scripts/deploy_infra.sh`, `scripts/deploy_infra.ps1` | Utiles si necesitas adaptar Git Bash o PowerShell. |
+| Ver relacion con otros pasos | `lab/14_workflow_and_scripts_reference.md` | Mapa completo del workflow. |
+
 ## Resultado esperado
 
 Archivos locales generados:
