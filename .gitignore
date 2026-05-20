@@ -1,0 +1,50 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+pytest-cache-files-*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment and AWS-generated config
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Lab-generated local data
+**/data/local_cache/*
+!**/data/local_cache/.gitkeep
+**/data/sample/*.csv
+**/data/sample/*.json
+
+# Lab-generated local artifacts and reports
+**/artifacts/local_outputs/*
+!**/artifacts/local_outputs/.gitkeep
+**/artifacts/model/*
+!**/artifacts/model/.gitkeep
+**/artifacts/metrics/*
+!**/artifacts/metrics/.gitkeep
+**/artifacts/predictions/*
+!**/artifacts/predictions/.gitkeep
+**/artifacts/governance/*
+!**/artifacts/governance/.gitkeep
+
+# Local Codex / assistant context
+AGENTS.md
+ai_context/

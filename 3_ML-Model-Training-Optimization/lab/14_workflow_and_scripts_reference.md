@@ -158,3 +158,12 @@ Cuando modifiques un script remoto compartido, el cambio impacta tanto el flujo 
    python -m src.create_pipeline
    python -m src.create_hpo_pipeline
    ```
+
+7. Para probar el Pipeline opcional con HPO usando solamente modulos Python, ejecuta:
+
+   ```bash
+   python -m src.create_hpo_pipeline
+   python -m src.run_hpo_pipeline
+   ```
+
+   `src.create_hpo_pipeline` actualiza la definicion del Pipeline en SageMaker. `src.run_hpo_pipeline` inicia una ejecucion nueva y dispara el Tuning Job administrado por SageMaker.
