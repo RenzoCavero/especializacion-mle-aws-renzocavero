@@ -451,6 +451,15 @@ O:
 python -m src.create_hpo_pipeline
 ```
 
+Si prefieres ejecutar solo los modulos Python, usa esta secuencia desde la raiz del laboratorio:
+
+```bash
+python -m src.create_hpo_pipeline
+python -m src.run_hpo_pipeline
+```
+
+El primer comando crea o actualiza la definicion `ml-training-opt-lab-hpo-pipeline`. El segundo comando inicia una ejecucion real, por lo que SageMaker crea los steps `IngestCuratedFeaturesForHPO`, `ProcessChurnFeaturesForHPO`, `TuneChurnModel`, `EvaluateBestHPOModel`, `CheckHPOF1BeforeRegister` y `RegisterBestHPOModel-RegisterModel`.
+
 Con Bash o Git Bash:
 
 ```bash

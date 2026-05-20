@@ -1,0 +1,55 @@
+{
+  "completed_at": "2026-05-18T14:53:32Z",
+  "local": {
+    "cleared_directories": {
+      "artifacts\\local_outputs": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "artifacts\\model": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "artifacts\\preprocessing": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\batch": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\events": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\feature_store": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\lake": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\local_cache": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\operational": {
+        "deleted": 0,
+        "skipped": []
+      },
+      "data\\retraining": {
+        "deleted": 0,
+        "skipped": []
+      }
+    },
+    "removed_caches": {
+      "deleted": 13,
+      "skipped": [
+        ".pytest_cache: [WinError 5] Acceso denegado: 'C:\\\\Users\\\\usuario\\\\Documents\\\\UTEC\\\\especializacion-mle-aws\\\\4_ML-Model-Deployment\\\\.pytest_cache'"
+      ]
+    },
+    "removed_files": [],
+    "skipped_files": []
+  }
+}

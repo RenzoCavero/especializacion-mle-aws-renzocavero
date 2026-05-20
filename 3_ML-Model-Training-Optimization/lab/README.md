@@ -183,6 +183,15 @@ make run-hpo-pipeline
 
 `make create-hpo-pipeline` crea o actualiza la definicion. `make run-hpo-pipeline` inicia la ejecucion que lanza un Tuning Job administrado.
 
+Comandos Python directos equivalentes:
+
+```bash
+python -m src.create_hpo_pipeline
+python -m src.run_hpo_pipeline
+```
+
+Usa estos comandos si quieres evitar `make` y ejecutar directamente los modulos del laboratorio. El primer comando sube la definicion del Pipeline HPO a SageMaker Pipelines; el segundo inicia una ejecucion nueva de ese Pipeline.
+
 En ambos casos, valida en Amazon SageMaker > Pipelines. Para la variante HPO, tambien revisa Amazon SageMaker AI > Hyperparameter tuning jobs.
 
 Cleanup:
