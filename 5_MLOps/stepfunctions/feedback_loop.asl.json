@@ -1,0 +1,70 @@
+{
+  "Comment": "MLOps feedback loop: diagnose alarm, decide action, execute one controlled branch, then record decision.",
+  "StartAt": "DiagnoseAlert",
+  "States": {
+    "DiagnoseAlert": {
+      "Type": "Task",
+      "Resource": "${FEEDBACK_HANDLER_LAMBDA_ARN}",
+      "Next": "DecideAction"
+    },
+    "DecideAction": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.recommended_action",
+          "StringEquals": "retraining",
+          "Next": "Retraining"
+        },
+        {
+          "Variable": "$.recommended_action",
+          "StringEquals": "rollback",
+          "Next": "Rollback"
+        },
+        {
+          "Variable": "$.recommended_action",
+          "StringEquals": "baseline_update",
+          "Next": "BaselineUpdate"
+        },
+        {
+          "Variable": "$.recommended_action",
+          "StringEquals": "human_review",
+          "Next": "HumanReview"
+        }
+      ],
+      "Default": "NoAction"
+    },
+    "Retraining": {
+      "Type": "Task",
+      "Resource": "${RETRAINING_TRIGGER_LAMBDA_ARN}",
+      "Next": "RecordDecision"
+    },
+    "Rollback": {
+      "Type": "Task",
+      "Resource": "${ROLLBACK_HANDLER_LAMBDA_ARN}",
+      "Next": "RecordDecision"
+    },
+    "BaselineUpdate": {
+      "Type": "Task",
+      "Resource": "${BASELINE_UPDATE_HANDLER_LAMBDA_ARN}",
+      "Next": "RecordDecision"
+    },
+    "HumanReview": {
+      "Type": "Task",
+      "Resource": "${HUMAN_REVIEW_HANDLER_LAMBDA_ARN}",
+      "Next": "RecordDecision"
+    },
+    "NoAction": {
+      "Type": "Pass",
+      "Result": {
+        "action": "no_action",
+        "message": "No operational change required."
+      },
+      "Next": "RecordDecision"
+    },
+    "RecordDecision": {
+      "Type": "Pass",
+      "ResultPath": "$.decision_recorded",
+      "End": true
+    }
+  }
+}

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+.env.cloud
+data/local_cache/*
+!data/local_cache/.gitkeep
+artifacts/local_outputs/*
+!artifacts/local_outputs/.gitkeep
+*.egg-info/
+.DS_Store

@@ -1,0 +1,5 @@
+# Intentionally empty.
+#
+# The managed SageMaker SKLearn processing image already includes the libraries
+# used by this lab. Avoid upgrading pandas/numpy/scikit-learn inside the job
+# unless the image version and dependency ABI are tested together.

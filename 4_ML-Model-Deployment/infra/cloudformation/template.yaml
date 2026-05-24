@@ -1,0 +1,262 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Lab 04 - SageMaker model deployment infrastructure"
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ml-model-deployment
+  Environment:
+    Type: String
+    Default: lab
+  ResourcePrefix:
+    Type: String
+    Default: ml-deploy-lab
+  CreateBucket:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+  ExistingBucketName:
+    Type: String
+    Default: ""
+  KmsKeyArn:
+    Type: String
+    Default: ""
+
+Conditions:
+  ShouldCreateBucket: !Equals [!Ref CreateBucket, "true"]
+  HasExistingBucket: !Not [!Equals [!Ref ExistingBucketName, ""]]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+
+Resources:
+  LabBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateBucket
+    Properties:
+      BucketName: !Sub "${ResourcePrefix}-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: MLModelDeployment
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: LabUser
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-sagemaker-execution-role-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Project
+          Value: MLModelDeployment
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: LabUser
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+      Policies:
+        - PolicyName: Lab04SageMakerDeploymentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3LabAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:AbortMultipartUpload
+                  - s3:ListBucketMultipartUploads
+                Resource:
+                  - !If
+                    - ShouldCreateBucket
+                    - !Sub "arn:${AWS::Partition}:s3:::${ResourcePrefix}-${AWS::AccountId}-${AWS::Region}"
+                    - !Sub "arn:${AWS::Partition}:s3:::${ExistingBucketName}"
+                  - !If
+                    - ShouldCreateBucket
+                    - !Sub "arn:${AWS::Partition}:s3:::${ResourcePrefix}-${AWS::AccountId}-${AWS::Region}/*"
+                    - !Sub "arn:${AWS::Partition}:s3:::${ExistingBucketName}/*"
+              - Sid: SageMakerDeploymentAccess
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateModel
+                  - sagemaker:DescribeModel
+                  - sagemaker:DeleteModel
+                  - sagemaker:CreateEndpointConfig
+                  - sagemaker:DescribeEndpointConfig
+                  - sagemaker:DeleteEndpointConfig
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:DescribeEndpoint
+                  - sagemaker:UpdateEndpoint
+                  - sagemaker:DeleteEndpoint
+                  - sagemaker:InvokeEndpoint
+                  - sagemaker:CreateTransformJob
+                  - sagemaker:DescribeTransformJob
+                  - sagemaker:StopTransformJob
+                  - sagemaker:DescribeModelPackage
+                  - sagemaker:ListModelPackages
+                  - sagemaker:DescribeModelPackageGroup
+                  - sagemaker:CreateModelPackage
+                  - sagemaker:CreateModelPackageGroup
+                  - sagemaker:UpdateModelPackage
+                  - sagemaker:DescribeFeatureGroup
+                  - sagemaker:CreateFeatureGroup
+                  - sagemaker:DeleteFeatureGroup
+                  - sagemaker:GetRecord
+                  - sagemaker:PutRecord
+                  - sagemaker:BatchGetRecord
+                Resource: "*"
+              - Sid: CloudWatchLogsAccess
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: "*"
+              - Sid: ApplicationAutoScalingAccess
+                Effect: Allow
+                Action:
+                  - application-autoscaling:RegisterScalableTarget
+                  - application-autoscaling:PutScalingPolicy
+                  - application-autoscaling:DescribeScalableTargets
+                  - application-autoscaling:DescribeScalingPolicies
+                  - application-autoscaling:DeregisterScalableTarget
+                  - application-autoscaling:DeleteScalingPolicy
+                Resource: "*"
+              - Sid: EcrReadOnly
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: "*"
+              - Sid: OptionalKmsAccess
+                Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !If [HasKmsKey, !Ref KmsKeyArn, !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*"]
+              - Sid: FraudOperationalAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - !GetAtt FraudDecisionTable.Arn
+                  - !GetAtt FraudEventQueue.Arn
+
+  FraudDecisionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ResourcePrefix}-fraud-decisions-${AWS::Region}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: transaction_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: transaction_id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Project
+          Value: MLModelDeployment
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: LabUser
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  FraudEventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ResourcePrefix}-fraud-events-${AWS::Region}"
+      MessageRetentionPeriod: 345600
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: MLModelDeployment
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: LabUser
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+Outputs:
+  BucketName:
+    Description: "Bucket for lab artifacts, inputs, outputs and data capture"
+    Value: !If
+      - ShouldCreateBucket
+      - !Ref LabBucket
+      - !Ref ExistingBucketName
+  SageMakerExecutionRoleArn:
+    Description: "SageMaker execution role ARN"
+    Value: !GetAtt SageMakerExecutionRole.Arn
+  SuggestedS3Prefix:
+    Description: "Suggested prefix for S3 objects created by the lab"
+    Value: !Sub "${ResourcePrefix}/${Environment}"
+  FraudS3Prefix:
+    Description: "Suggested prefix for fraud architecture objects"
+    Value: !Sub "${ResourcePrefix}/${Environment}/fraud"
+  FraudDecisionTableName:
+    Description: "DynamoDB table for fraud operational decisions"
+    Value: !Ref FraudDecisionTable
+  FraudEventQueueUrl:
+    Description: "SQS queue URL for async fraud prediction events"
+    Value: !Ref FraudEventQueue
+  FraudEventQueueName:
+    Description: "SQS queue name for async fraud prediction events"
+    Value: !GetAtt FraudEventQueue.QueueName

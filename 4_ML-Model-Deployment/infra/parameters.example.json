@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "ml-model-deployment"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "lab"
+  },
+  {
+    "ParameterKey": "ResourcePrefix",
+    "ParameterValue": "ml-deploy-lab"
+  },
+  {
+    "ParameterKey": "CreateBucket",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "ExistingBucketName",
+    "ParameterValue": ""
+  }
+]

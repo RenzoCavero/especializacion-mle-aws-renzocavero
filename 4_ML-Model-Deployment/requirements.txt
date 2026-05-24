@@ -1,0 +1,9 @@
+boto3
+sagemaker
+pandas
+numpy
+scikit-learn
+pydantic
+python-dotenv
+pytest
+joblib

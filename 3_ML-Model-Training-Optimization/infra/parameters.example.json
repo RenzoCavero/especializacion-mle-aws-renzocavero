@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "ml-model-training-optimization"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "lab"
+  },
+  {
+    "ParameterKey": "ResourcePrefix",
+    "ParameterValue": "ml-training-opt-lab"
+  },
+  {
+    "ParameterKey": "S3BucketName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "LogRetentionDays",
+    "ParameterValue": "14"
+  }
+]
