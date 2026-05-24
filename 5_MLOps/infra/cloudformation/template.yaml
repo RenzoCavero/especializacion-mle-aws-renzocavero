@@ -1,0 +1,239 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Infrastructure for the AWS MLOps educational lab."
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: mlops-aws
+  Environment:
+    Type: String
+    Default: lab
+  ResourcePrefix:
+    Type: String
+    Default: mlops-lab
+  CreateBucket:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+  ExistingBucketName:
+    Type: String
+    Default: ""
+  ModelPackageGroupName:
+    Type: String
+    Default: mlops-model-package-group
+  KmsKeyArn:
+    Type: String
+    Default: ""
+
+Conditions:
+  ShouldCreateBucket: !Equals [!Ref CreateBucket, "true"]
+  HasKmsKey: !Not [!Equals [!Ref KmsKeyArn, ""]]
+
+Resources:
+  LabBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateBucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: MLOpsAWS
+        - Key: Environment
+          Value: Lab
+        - Key: Owner
+          Value: Student
+        - Key: ManagedBy
+          Value: IaC
+        - Key: CostCenter
+          Value: Training
+        - Key: AutoDelete
+          Value: "true"
+
+  ModelPackageGroup:
+    Type: AWS::SageMaker::ModelPackageGroup
+    Properties:
+      ModelPackageGroupName: !Ref ModelPackageGroupName
+      ModelPackageGroupDescription: "Educational MLOps model package group."
+      Tags:
+        - Key: Project
+          Value: MLOpsAWS
+        - Key: Environment
+          Value: Lab
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-${Environment}-sagemaker-exec"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-${Environment}-sagemaker-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub
+                    - "arn:${AWS::Partition}:s3:::${BucketName}"
+                    - BucketName: !If [ShouldCreateBucket, !Ref LabBucket, !Ref ExistingBucketName]
+                  - !Sub
+                    - "arn:${AWS::Partition}:s3:::${BucketName}/*"
+                    - BucketName: !If [ShouldCreateBucket, !Ref LabBucket, !Ref ExistingBucketName]
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateProcessingJob
+                  - sagemaker:CreateTrainingJob
+                  - sagemaker:CreateModel
+                  - sagemaker:CreateEndpointConfig
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:UpdateEndpoint
+                  - sagemaker:Describe*
+                  - sagemaker:List*
+                  - sagemaker:CreatePipeline
+                  - sagemaker:UpdatePipeline
+                  - sagemaker:StartPipelineExecution
+                  - sagemaker:AddTags
+                  - sagemaker:DeleteTags
+                  - sagemaker:ListTags
+                  - sagemaker:CreateModelPackage
+                  - sagemaker:UpdateModelPackage
+                  - sagemaker:CreateModelPackageGroup
+                  - sagemaker:CreateMonitoringSchedule
+                  - sagemaker:DeleteMonitoringSchedule
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ResourcePrefix}-${Environment}-sagemaker-exec"
+      Tags:
+        - Key: Project
+          Value: MLOpsAWS
+        - Key: Environment
+          Value: Lab
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-${Environment}-lambda"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-${Environment}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateProcessingJob
+                  - sagemaker:Describe*
+                  - sagemaker:List*
+                  - sagemaker:StartPipelineExecution
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:DescribeAlarms
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: "*"
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ResourcePrefix}-${Environment}-sagemaker-exec"
+
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-${Environment}-sfn"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-${Environment}-sfn-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: "*"
+
+  EventBridgeToStepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-${Environment}-events-sfn"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-${Environment}-events-sfn-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: "*"
+
+Outputs:
+  BucketName:
+    Value: !If [ShouldCreateBucket, !Ref LabBucket, !Ref ExistingBucketName]
+  SageMakerExecutionRoleArn:
+    Value: !GetAtt SageMakerExecutionRole.Arn
+  LambdaExecutionRoleArn:
+    Value: !GetAtt LambdaExecutionRole.Arn
+  StepFunctionsRoleArn:
+    Value: !GetAtt StepFunctionsRole.Arn
+  EventBridgeToStepFunctionsRoleArn:
+    Value: !GetAtt EventBridgeToStepFunctionsRole.Arn
+  ModelPackageGroupName:
+    Value: !Ref ModelPackageGroupName
