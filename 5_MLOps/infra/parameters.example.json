@@ -1,0 +1,27 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "mlops-aws"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "lab"
+  },
+  {
+    "ParameterKey": "ResourcePrefix",
+    "ParameterValue": "mlops-lab"
+  },
+  {
+    "ParameterKey": "CreateBucket",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "ExistingBucketName",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "ModelPackageGroupName",
+    "ParameterValue": "mlops-model-package-group"
+  }
+]
+

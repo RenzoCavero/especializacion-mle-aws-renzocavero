@@ -24,6 +24,10 @@ env/
 *.log
 *.tmp
 *.temp
+*cloudtrail*.json
+*cloudtrail*.jsonl
+cloudtrail-*.json
+cloudtrail-*.jsonl
 .DS_Store
 Thumbs.db
 
